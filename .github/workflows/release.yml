@@ -1,0 +1,127 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: Shellmate
+  SCHEME: Shellmate
+  BUNDLE_ID: com.shellmate.app
+
+jobs:
+  build-mac:
+    name: Build, Sign, Notarize & Release
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve SPM dependencies
+        run: swift package resolve
+
+      - name: Build release archive
+        run: |
+          xcodebuild archive \
+            -scheme "$SCHEME" \
+            -archivePath "build/$APP_NAME.xcarchive" \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGN_IDENTITY="${{ secrets.DEVELOPER_ID_APPLICATION }}" \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            CODE_SIGN_STYLE=Manual \
+            OTHER_CODE_SIGN_FLAGS="--options=runtime" \
+            MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
+            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            | xcpretty
+
+      - name: Export app from archive
+        run: |
+          cat > ExportOptions.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>developer-id</string>
+              <key>teamID</key>
+              <string>${{ secrets.APPLE_TEAM_ID }}</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>signingCertificate</key>
+              <string>${{ secrets.DEVELOPER_ID_APPLICATION }}</string>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "build/$APP_NAME.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath "build/export" \
+            | xcpretty
+
+      - name: Create DMG
+        run: |
+          brew install create-dmg || true
+          create-dmg \
+            --volname "$APP_NAME" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "$APP_NAME.app" 150 190 \
+            --app-drop-link 450 190 \
+            --no-internet-enable \
+            "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg" \
+            "build/export/$APP_NAME.app" \
+            || true
+          # create-dmg returns non-zero even on success sometimes; verify file exists
+          ls -la "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg"
+
+      - name: Import notarization credentials
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool store-credentials "AC_PASSWORD" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD"
+
+      - name: Notarize DMG
+        run: |
+          xcrun notarytool submit \
+            "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg" \
+            --keychain-profile "AC_PASSWORD" \
+            --wait
+
+      - name: Staple notarization ticket
+        run: |
+          xcrun stapler staple "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg"
+
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          chmod +x ci/generate-appcast.sh
+          ci/generate-appcast.sh \
+            "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg" \
+            "${{ steps.version.outputs.VERSION }}" \
+            "$GITHUB_RUN_NUMBER"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/${{ env.APP_NAME }}-${{ steps.version.outputs.VERSION }}.dmg
+            build/appcast.xml
+          generate_release_notes: true
+          draft: false
