@@ -102,21 +102,6 @@ struct ShellServiceTests {
         #expect(result.stdout.count <= 1_048_576 + 100) // small margin for encoding
     }
 
-    // MARK: - ShellExecuteTool compat shim
-
-    @Test("ShellTool compat shim works")
-    func compatShim() async {
-        let result = await ShellTool.execute(input: ["command": "echo compat"])
-        #expect(!result.isError)
-        #expect(result.content.contains("compat"))
-    }
-
-    @Test("ShellTool compat shim handles missing command")
-    func compatShimMissing() async {
-        let result = await ShellTool.execute(input: [:])
-        #expect(result.isError)
-    }
-
     // MARK: - ShellExecuteTool
 
     @Test("ShellExecuteTool conforms to AgentTool")

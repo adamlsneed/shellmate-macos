@@ -1,9 +1,6 @@
 import Testing; import Foundation; @testable import Shellmate
-@Suite("WebSearchTool") struct WebSearchToolTests {
-    @Test("missing query") func m() async { #expect((await WebSearchTool.execute(input:[:])).isError) }
-    @Test("no API key") func k() async { if ProcessInfo.processInfo.environment["BRAVE_API_KEY"]==nil{#expect((await WebSearchTool.execute(input:["query":"test"])).content.contains("BRAVE_API_KEY"))} }
 
-    // Instance API tests
+@Suite("WebSearchTool") struct WebSearchToolTests {
     @Test("instance missing query") func instanceMissing() async throws {
         let result = try await WebSearchTool().execute(parameters: [:])
         #expect(result.isError)
@@ -26,13 +23,8 @@ import Testing; import Foundation; @testable import Shellmate
         #expect(tool.parameterSchema.required == ["query"])
     }
 }
-@Suite("WebFetchTool") struct WebFetchToolTests {
-    @Test("missing url") func m() async { #expect((await WebFetchTool.execute(input:[:])).isError) }
-    @Test("blocks localhost") func l() async { #expect((await WebFetchTool.execute(input:["url":"http://localhost:3000"])).isError) }
-    @Test("blocks private") func p() async { #expect((await WebFetchTool.execute(input:["url":"http://192.168.1.1"])).isError) }
-    @Test("blocks ftp") func f() async { #expect((await WebFetchTool.execute(input:["url":"ftp://x.com"])).isError) }
 
-    // Instance API tests
+@Suite("WebFetchTool") struct WebFetchToolTests {
     @Test("instance missing url") func instanceMissing() async throws {
         let result = try await WebFetchTool().execute(parameters: [:])
         #expect(result.isError)
@@ -43,6 +35,16 @@ import Testing; import Foundation; @testable import Shellmate
         let result = try await WebFetchTool().execute(parameters: ["url": "http://localhost:3000"])
         #expect(result.isError)
         #expect(result.content.contains("restricted"))
+    }
+
+    @Test("instance blocks private IP") func instanceBlocksPrivate() async throws {
+        let result = try await WebFetchTool().execute(parameters: ["url": "http://192.168.1.1"])
+        #expect(result.isError)
+    }
+
+    @Test("instance blocks ftp") func instanceBlocksFtp() async throws {
+        let result = try await WebFetchTool().execute(parameters: ["url": "ftp://x.com"])
+        #expect(result.isError)
     }
 
     @Test("protocol properties") func props() {

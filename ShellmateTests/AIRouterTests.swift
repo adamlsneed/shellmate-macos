@@ -36,16 +36,25 @@ struct AIRouterTests {
         #expect(ToolDenyCategory.browser.blockedTools == ["web_fetch"])
     }
 
-    @Test("tool filtering respects deny categories")
+    @Test("deny categories filter inline tool arrays")
     func testToolFiltering() {
-        let all = ToolDefinitions.all
+        let all: [ToolDefinition] = [
+            ToolDefinition(name: "shell_exec", description: "Shell", inputSchema: ToolInputSchema(type: "object", properties: [:], required: [])),
+            ToolDefinition(name: "file_read", description: "Read", inputSchema: ToolInputSchema(type: "object", properties: [:], required: [])),
+            ToolDefinition(name: "file_write", description: "Write", inputSchema: ToolInputSchema(type: "object", properties: [:], required: [])),
+            ToolDefinition(name: "file_list", description: "List", inputSchema: ToolInputSchema(type: "object", properties: [:], required: [])),
+            ToolDefinition(name: "web_search", description: "Search", inputSchema: ToolInputSchema(type: "object", properties: [:], required: [])),
+            ToolDefinition(name: "web_fetch", description: "Fetch", inputSchema: ToolInputSchema(type: "object", properties: [:], required: [])),
+        ]
         #expect(all.count == 6)
 
-        let withoutExec = ToolDefinitions.available(denyCategories: [.exec])
+        let blockedExec = Set(ToolDenyCategory.exec.blockedTools)
+        let withoutExec = all.filter { !blockedExec.contains($0.name) }
         #expect(withoutExec.count == 5)
         #expect(!withoutExec.contains(where: { $0.name == "shell_exec" }))
 
-        let withoutWeb = ToolDefinitions.available(denyCategories: [.web])
+        let blockedWeb = Set(ToolDenyCategory.web.blockedTools)
+        let withoutWeb = all.filter { !blockedWeb.contains($0.name) }
         #expect(withoutWeb.count == 4)
     }
 }

@@ -55,20 +55,3 @@ struct ShellExecuteTool: AgentTool {
         }
     }
 }
-
-// MARK: - Compat shim for ToolExecutor (Task 8 will remove this)
-
-/// Backward-compatible static interface matching the old ShellTool enum.
-/// This shim allows ToolExecutor to continue working until it is refactored in Task 8.
-enum ShellTool {
-    static func execute(input: [String: Any]) async -> ToolExecutionResult {
-        let service = ShellService()
-        let tool = ShellExecuteTool(service: service)
-        do {
-            let result = try await tool.execute(parameters: input)
-            return ToolExecutionResult(content: result.content, isError: result.isError)
-        } catch {
-            return ToolExecutionResult(content: error.localizedDescription, isError: true)
-        }
-    }
-}

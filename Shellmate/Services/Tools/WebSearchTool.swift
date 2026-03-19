@@ -71,18 +71,3 @@ struct WebSearchTool: AgentTool {
         return .success(formatted)
     }
 }
-
-// MARK: - Backward Compatibility
-
-// Temporary compat — removed when ToolExecutor is refactored in Task 8
-extension WebSearchTool {
-    static func execute(input: [String: Any]) async -> ToolExecutionResult {
-        let tool = WebSearchTool()
-        do {
-            let result = try await tool.execute(parameters: input)
-            return ToolExecutionResult(content: result.content, isError: result.isError)
-        } catch {
-            return ToolExecutionResult(content: error.localizedDescription, isError: true)
-        }
-    }
-}

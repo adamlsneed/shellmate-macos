@@ -73,7 +73,7 @@ struct OpenAIClientTests {
 
     @Test("builds request with tools in function format")
     func testBuildRequestWithTools() throws {
-        let tools = [ToolDefinitions.webSearch]
+        let tools = [ToolDefinition(name: "web_search", description: "Search the web", inputSchema: ToolInputSchema(type: "object", properties: ["query": ToolProperty(type: "string", description: "The query")], required: ["query"]))]
         let request = try OpenAIClient.buildRequest(
             messages: [["role": "user", "content": "Search"]],
             system: nil,

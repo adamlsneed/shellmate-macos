@@ -40,4 +40,6 @@ struct CapabilitiesConfig: Codable, Sendable {
     var memory: String = "core"
     var recommendedSkills: [String] = []
     var tools: ToolPermissions = ToolPermissions()
+    var enabledCategories: [String] = ToolCategory.allCases.map(\.rawValue)
+    var autoApproveCategories: [String] = []
 }

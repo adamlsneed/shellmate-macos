@@ -35,7 +35,7 @@ enum AnthropicClient {
             }
 
             if retryableStatusCodes.contains(httpResponse.statusCode) {
-                let body = String(data: data, encoding: .utf8) ?? "unknown error"
+                let body = String(String(data: data, encoding: .utf8)?.prefix(500) ?? "unknown error")
                 let retryAfter = parseRetryAfter(httpResponse)
                 throw RetryableError(
                     underlying: AIError.apiError(statusCode: httpResponse.statusCode, message: body),
@@ -44,7 +44,7 @@ enum AnthropicClient {
             }
 
             guard httpResponse.statusCode == 200 else {
-                let body = String(data: data, encoding: .utf8) ?? "unknown error"
+                let body = String(String(data: data, encoding: .utf8)?.prefix(500) ?? "unknown error")
                 throw AIError.apiError(statusCode: httpResponse.statusCode, message: body)
             }
 
@@ -217,7 +217,7 @@ enum AnthropicClient {
         if let system { body["system"] = system }
         if stream { body["stream"] = true }
         if !tools.isEmpty {
-            body["tools"] = ToolDefinitions.toAnthropicFormat(tools)
+            body["tools"] = tools.toAnthropicFormat()
         }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

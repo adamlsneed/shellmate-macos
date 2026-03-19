@@ -48,37 +48,3 @@ struct FileReadTool: AgentTool {
         }
     }
 }
-
-// MARK: - Backward Compatibility
-
-// Temporary compat — removed when ToolExecutor is refactored in Task 8
-extension FileReadTool {
-    static func execute(input: [String: Any]) -> ToolExecutionResult {
-        guard let path = input["path"] as? String else {
-            return ToolExecutionResult(content: "Missing required 'path' parameter", isError: true)
-        }
-
-        if SecurityPolicy.isPathBlocked(path) {
-            return ToolExecutionResult(content: "Access denied: path is restricted", isError: true)
-        }
-
-        let url = URL(fileURLWithPath: path).standardized
-
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return ToolExecutionResult(content: "File not found: \(path)", isError: true)
-        }
-
-        do {
-            let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
-            let size = attrs[.size] as? Int ?? 0
-            if size > 2 * 1024 * 1024 {
-                return ToolExecutionResult(content: "File too large (\(size) bytes, max \(2 * 1024 * 1024))", isError: true)
-            }
-
-            let content = try String(contentsOf: url, encoding: .utf8)
-            return ToolExecutionResult(content: content, isError: false)
-        } catch {
-            return ToolExecutionResult(content: "Failed to read file: \(error.localizedDescription)", isError: true)
-        }
-    }
-}

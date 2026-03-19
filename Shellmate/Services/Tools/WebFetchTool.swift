@@ -90,22 +90,6 @@ struct WebFetchTool: AgentTool {
         }
     }
 }
-
-// MARK: - Backward Compatibility
-
-// Temporary compat — removed when ToolExecutor is refactored in Task 8
-extension WebFetchTool {
-    static func execute(input: [String: Any]) async -> ToolExecutionResult {
-        let tool = WebFetchTool()
-        do {
-            let result = try await tool.execute(parameters: input)
-            return ToolExecutionResult(content: result.content, isError: result.isError)
-        } catch {
-            return ToolExecutionResult(content: error.localizedDescription, isError: true)
-        }
-    }
-}
-
 // MARK: - SSRF-Protected URL Session
 
 /// URLSession delegate that validates redirect targets against SecurityPolicy.
