@@ -43,11 +43,22 @@ protocol AgentTool: Sendable {
     var actionTier: ActionTier { get }
     var parameterSchema: ToolInputSchema { get }
 
-    func execute(parameters: [String: Any]) async throws -> ToolResult
+    func execute(parameters: [String: Any]) async throws -> AgentToolResult
+
+    /// Plain-language description of what this action will do, shown in confirmation cards.
+    /// Required for .write and .destructive tier tools.
+    func confirmationDescription(parameters: [String: Any]) -> String
+}
+
+extension AgentTool {
+    /// Default implementation for .read tier tools that don't need confirmation.
+    func confirmationDescription(parameters: [String: Any]) -> String { "" }
 }
 ```
 
-Tools receive `[String: Any]` parameters (conversion from `JSONValue` happens once in the registry). Each tool is responsible for parameter validation and calling `SecurityPolicy` where applicable.
+Tools receive `[String: Any]` parameters (conversion from `JSONValue` happens once in the executor). Each tool is responsible for parameter validation and calling `SecurityPolicy` where applicable.
+
+**Note on `[String: Any]` Sendability:** `[String: Any]` is not `Sendable`. When passing parameters across actor boundaries, use `nonisolated(unsafe)` annotations or `@unchecked Sendable` wrappers (as the existing codebase already does with `SendableDict`). This is safe because the dictionaries contain only JSON-compatible value types.
 
 ### ToolProvider Protocol
 
@@ -79,14 +90,19 @@ enum ActionTier: Sendable {
     case destructive // Prominent warning, never auto-approved
 }
 
-struct ToolResult: Sendable {
+struct AgentToolResult: Sendable {
     let content: String
     let isError: Bool
     let metadata: [String: String]
 
-    static func success(_ content: String, metadata: [String: String] = [:]) -> ToolResult
-    static func error(_ message: String) -> ToolResult
+    static func success(_ content: String, metadata: [String: String] = [:]) -> AgentToolResult
+    static func error(_ message: String) -> AgentToolResult
 }
+```
+
+**Naming note:** This type is named `AgentToolResult` (not `ToolResult`) to avoid collision with the existing `ToolResult` in `ChatMessage.swift`, which is used in the chat serialization pipeline and has a different shape (includes `id` for correlation with `ToolCall`). The existing `ToolExecutionResult` in `ToolExecutor.swift` remains as the bridge type between the new `AgentToolResult` and the `ToolUseLoop`.
+
+```swift
 
 enum SystemPermission: String, CaseIterable, Sendable {
     case calendars, reminders, contacts, location
@@ -112,7 +128,7 @@ actor ToolRegistry {
     func unregister(_ category: ToolCategory)
 
     // Execution — called by ToolExecutor
-    func execute(toolName: String, parameters: [String: Any]) async throws -> ToolResult
+    func execute(toolName: String, parameters: [String: Any]) async throws -> AgentToolResult
 
     // Schema generation — called before each LLM request
     func toolSchemas(for categories: Set<ToolCategory>, denyCategories: [ToolDenyCategory]) -> [ToolDefinition]
@@ -137,6 +153,8 @@ struct CategoryResolver {
 
 Static keyword map (e.g., "calendar"/"event"/"schedule" → `.calendar`). Always-included: `.shell` and `.files`. Fallback: if no keywords match, include all enabled categories.
 
+**Design note:** `CategoryResolver` is a token-cost optimization, not a routing mechanism. The LLM's own tool selection is the primary filter — `CategoryResolver` just decides which schemas to include in the request. False positives (including extra categories) are acceptable and harmless; false negatives (missing a needed category) are not. The fallback-to-all rule ensures we never miss a needed tool.
+
 ### Refactored ToolExecutor
 
 Thin wrapper delegating to registry + confirmation:
@@ -145,6 +163,7 @@ Thin wrapper delegating to registry + confirmation:
 actor ToolExecutor {
     private let registry: ToolRegistry
     private let confirmationService: ConfirmationService
+    private let permissionManager: PermissionManager
 
     func execute(name: String, input: [String: JSONValue]) async -> ToolExecutionResult {
         let anyInput = input.mapValues(\.anyValue)
@@ -153,13 +172,24 @@ actor ToolExecutor {
             return .init(content: "Unknown tool: \(name)", isError: true)
         }
 
+        // Permission check (before confirmation — no point confirming if we can't execute)
+        if let permResult = await permissionManager.checkPermissions(for: tool) {
+            return ToolExecutionResult(content: permResult, isError: true)
+        }
+
+        // Confirmation check
         if tool.actionTier != .read {
             let approved = await confirmationService.confirm(tool: tool, parameters: anyInput)
             if !approved { return .init(content: "Action cancelled by user.", isError: true) }
         }
 
-        let result = try await tool.execute(parameters: anyInput)
-        return ToolExecutionResult(content: result.content, isError: result.isError)
+        // Execute with error handling
+        do {
+            let result = try await tool.execute(parameters: anyInput)
+            return ToolExecutionResult(content: result.content, isError: result.isError)
+        } catch {
+            return ToolExecutionResult(content: error.localizedDescription, isError: true)
+        }
     }
 }
 ```
@@ -197,6 +227,7 @@ ToolExecutor.execute()
 ```swift
 actor ConfirmationService {
     private var autoApproveCategories: Set<ToolCategory> = []
+    private let uiHandler: ConfirmationUIHandler  // @MainActor class
 
     func confirm(tool: AgentTool, parameters: [String: Any]) async -> Bool {
         // Auto-approve .write tier if user opted in for this category
@@ -205,14 +236,33 @@ actor ConfirmationService {
         }
         // Destructive tier never auto-approves
 
-        return await requestUserConfirmation(tool: tool, parameters: parameters)
+        // Hop to MainActor via the UI handler
+        let description = tool.confirmationDescription(parameters: parameters)
+        return await uiHandler.requestConfirmation(
+            toolIdentifier: tool.identifier,
+            description: description,
+            tier: tool.actionTier
+        )
     }
+}
 
-    @MainActor
-    private func requestUserConfirmation(tool: AgentTool, parameters: [String: Any]) async -> Bool {
+/// Separate @MainActor class handles the UI bridge.
+/// Cannot be a method on the actor — Swift does not allow @MainActor methods
+/// on a custom actor.
+@MainActor
+final class ConfirmationUIHandler {
+    weak var chatState: ChatState?
+
+    func requestConfirmation(toolIdentifier: String, description: String, tier: ActionTier) async -> Bool {
         await withCheckedContinuation { continuation in
-            // Posts ConfirmationRequest to ChatState, UI renders card
-            // Continuation resumes when user taps Approve/Deny
+            let request = ConfirmationRequest(
+                id: UUID(),
+                toolIdentifier: toolIdentifier,
+                description: description,
+                tier: tier,
+                continuation: continuation
+            )
+            chatState?.pendingConfirmation = request
         }
     }
 }
@@ -303,7 +353,7 @@ Replaces the current `ShellTool` static enum. Shared by all CLI-dependent capabi
 
 ```swift
 actor ShellService {
-    private var history: [ShellHistoryEntry] = []  // ring buffer, last 100
+    private var history: [ShellHistoryEntry] = []  // shell command history, ring buffer, last 100
     private var environmentCache: [String: String]?
 
     /// Structured execution — executable + arguments array (no injection risk)
@@ -349,7 +399,7 @@ actor ShellService {
 ### Safety Rules
 
 1. `run()` resolves executable to absolute path via `which()` before execution
-2. `runCommand()` checks `SecurityPolicy.isShellCommandBlocked()` first
+2. `runCommand()` checks `SecurityPolicy.checkShellCommand() (returns optional blocked-pattern description, or nil if allowed)` first
 3. Output capped at 1MB stdout + 1MB stderr
 4. Timeout kills entire process tree (SIGTERM → 5s → SIGKILL)
 5. Every execution logged to history (command text only, never env vars)
@@ -413,6 +463,11 @@ struct NaturalDateParser: Sendable {
 3. Colloquial time mapping (`"morning"` → 9am, `"afternoon"` → 1pm, `"evening"` → 6pm)
 4. All resolution in user's local timezone via `Calendar.current`
 5. Ambiguous past dates roll forward
+6. Falls back to ISO 8601 parsing (`DateFormatter` with `iso8601` style) for structured dates
+
+### Failure Behavior
+
+All parse methods return `nil` on failure. When a tool receives `nil`, it returns an error to the LLM asking it to rephrase with a more specific date/time. Example: `"I couldn't understand that date. Could you try something like 'next Tuesday at 3pm' or 'March 25'?"`
 
 ---
 
@@ -420,14 +475,16 @@ struct NaturalDateParser: Sendable {
 
 ### Migration Map
 
-| Current | Becomes | Provider |
-|---|---|---|
-| `ShellTool` (static enum) | `ShellExecuteTool: AgentTool` | `ShellProvider` |
-| `FileReadTool` (static enum) | `FileReadTool: AgentTool` | `FilesProvider` |
-| `FileWriteTool` (static enum) | `FileWriteTool: AgentTool` | `FilesProvider` |
-| `FileListTool` (static enum) | `FileListTool: AgentTool` | `FilesProvider` |
-| `WebSearchTool` (static enum) | `WebSearchTool: AgentTool` | `WebProvider` |
-| `WebFetchTool` (static enum) | `WebFetchTool: AgentTool` | `WebProvider` |
+| Current | Becomes | Provider | Identifier (unchanged) |
+|---|---|---|---|
+| `ShellTool` (static enum) | `ShellExecuteTool: AgentTool` | `ShellProvider` | `"shell_exec"` |
+| `FileReadTool` (static enum) | `FileReadTool: AgentTool` | `FilesProvider` | `"file_read"` |
+| `FileWriteTool` (static enum) | `FileWriteTool: AgentTool` | `FilesProvider` | `"file_write"` |
+| `FileListTool` (static enum) | `FileListTool: AgentTool` | `FilesProvider` | `"file_list"` |
+| `WebSearchTool` (static enum) | `WebSearchTool: AgentTool` | `WebProvider` | `"web_search"` |
+| `WebFetchTool` (static enum) | `WebFetchTool: AgentTool` | `WebProvider` | `"web_fetch"` |
+
+**Identifier stability:** Tool identifier strings stay the same during migration (e.g., `"shell_exec"` not `"shell_execute"`). This preserves compatibility with existing `ToolDenyCategory.blockedTools` arrays and any saved config deny lists. New tools added in later phases use descriptive identifiers (e.g., `"calendar_create_event"`).
 
 ### Steps
 
@@ -437,13 +494,13 @@ struct NaturalDateParser: Sendable {
 4. `ToolDefinitions` enum deleted
 5. `ToolExecutor` switch replaced by `ToolRegistry` lookup
 6. `ToolUseLoop` gets `ToolRegistry` injected
-7. `ToolDenyCategory` stays for per-agent restrictions
+7. `ToolDenyCategory` stays for per-agent restrictions — `blockedTools` arrays remain valid since identifiers don't change
 8. `toAnthropicFormat()` / `toOpenAIFormat()` move to `ToolRegistry`
 
 ### What Doesn't Change
 
 - `ToolInputSchema`, `ToolProperty` structs — reused as-is
-- `SecurityPolicy` — untouched
+- `SecurityPolicy` — the type itself is untouched (path/URL/command blocklists stay as-is). However, `ShellService` absorbs and extends the safety behaviors currently embedded in `ShellTool`: output cap reduced from 10MB to 1MB, timeout now kills the process tree (SIGTERM → 5s → SIGKILL) instead of just SIGTERM, and structured `run()` resolves absolute paths. These are behavioral improvements, not SecurityPolicy changes.
 - `AIRouter`, `AnthropicClient`, `OpenAIClient` — untouched
 - `ToolUseLoop` round logic — unchanged
 
@@ -480,9 +537,11 @@ struct CapabilitiesConfig: Codable, Sendable {
 }
 ```
 
+**Backwards compatibility:** Since all new fields have default values and `Codable` synthesis is used, existing `shellmate.json` files missing these keys will decode successfully with defaults. No custom `init(from:)` needed.
+
 ### Action History
 
-In-memory ring buffer (last 200 actions) logged by `ToolRegistry`. Each entry: timestamp, tool identifier, sanitized parameters summary, result summary, duration. Viewable in settings. Not persisted to disk (privacy-first).
+Separate from shell command history (Section 6). In-memory tool action log (last 200 entries) logged by `ToolRegistry`. Each entry: timestamp, tool identifier, sanitized parameters summary, result summary, duration. Viewable in settings. Not persisted to disk (privacy-first).
 
 ---
 
@@ -503,7 +562,7 @@ Everything in this spec: protocols, registry, category resolver, confirmation se
 | `DisplayProvider` | display_info, display_brightness, display_dark_mode | read/write | CoreGraphics, IOKit |
 | `AudioProvider` | audio_volume, audio_input_output, audio_now_playing, audio_playback_control | read/write | CoreAudio, MediaPlayer |
 
-No macOS permission prompts needed. Minimal new dependencies.
+No macOS permission prompts needed (app is non-sandboxed, so MediaPlayer metadata access works without entitlements). Minimal new dependencies.
 
 ### Phase 3 — Enhanced Shell & Files
 
@@ -561,7 +620,7 @@ Shellmate/
         ToolProvider.swift           # Protocol
         ToolRegistry.swift           # Actor
         CategoryResolver.swift       # Keyword-based filtering
-        ToolResult.swift             # Result type
+        AgentToolResult.swift        # Result type (named to avoid collision with ChatMessage.ToolResult)
         ActionTier.swift             # Read/Write/Destructive enum
         ToolCategory.swift           # Category enum
       Shell/
