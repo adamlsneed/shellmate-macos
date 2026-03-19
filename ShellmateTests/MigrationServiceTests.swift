@@ -1,6 +1,31 @@
-import Testing; import Foundation; @testable import Shellmate
+import Testing
+import Foundation
+@testable import Shellmate
+
 @Suite("MigrationService") struct MigrationServiceTests {
-    @Test("needs migration logic") func nm() throws { let d=TestFixtures.makeTempDir(prefix:"m"); defer{TestFixtures.cleanupTempDir(d)}; try FileManager.default.createDirectory(at:d.appendingPathComponent(".openclaw"),withIntermediateDirectories:true); #expect(!FileManager.default.fileExists(atPath:d.appendingPathComponent(".shellmate").path)) }
-    @Test("copy and rename") func cr() throws { let d=TestFixtures.makeTempDir(prefix:"m3"); defer{TestFixtures.cleanupTempDir(d)}; let s=d.appendingPathComponent("s"); let t=d.appendingPathComponent("t"); try FileManager.default.createDirectory(at:s,withIntermediateDirectories:true); try "cfg".write(to:s.appendingPathComponent("openclaw.json"),atomically:true,encoding:.utf8); try FileManager.default.copyItem(at:s,to:t); try FileManager.default.moveItem(at:t.appendingPathComponent("openclaw.json"),to:t.appendingPathComponent("shellmate.json")); #expect(FileManager.default.fileExists(atPath:t.appendingPathComponent("shellmate.json").path)) }
-    @Test("service") func sc() { _ = MigrationService().needsMigration }
+    @Test("needsMigration false when no legacy") func t1() {
+        let tmp = TestFixtures.makeTempDir(prefix: "mig")
+        defer { TestFixtures.cleanupTempDir(tmp) }
+        #expect(!MigrationService(legacyDir: tmp.appendingPathComponent("x"), targetDir: tmp.appendingPathComponent("y")).needsMigration)
+    }
+    @Test("migrate copies and updates paths") func t2() throws {
+        let tmp = TestFixtures.makeTempDir(prefix: "mig2")
+        defer { TestFixtures.cleanupTempDir(tmp) }
+        let legacy = tmp.appendingPathComponent(".openclaw")
+        try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
+        let cfg: [String: Any] = ["agents": ["defaults": ["workspace": "~/.openclaw/workspace"]]]
+        try JSONSerialization.data(withJSONObject: cfg).write(to: legacy.appendingPathComponent("openclaw.json"))
+        let target = tmp.appendingPathComponent(".shellmate")
+        try MigrationService(legacyDir: legacy, targetDir: target).migrate()
+        #expect(FileManager.default.fileExists(atPath: target.appendingPathComponent("shellmate.json").path))
+        let d = try Data(contentsOf: target.appendingPathComponent("shellmate.json"))
+        let j = try JSONSerialization.jsonObject(with: d) as! [String: Any]
+        let a = (j["agents"] as! [String: Any])["defaults"] as! [String: Any]
+        #expect((a["workspace"] as! String) == "~/.shellmate/workspace")
+    }
+    @Test("migrate throws no source") func t3() {
+        let tmp = TestFixtures.makeTempDir(prefix: "mig3")
+        defer { TestFixtures.cleanupTempDir(tmp) }
+        #expect(throws: MigrationError.self) { try MigrationService(legacyDir: tmp.appendingPathComponent("x"), targetDir: tmp.appendingPathComponent("y")).migrate() }
+    }
 }

@@ -1,20 +1,30 @@
-import Testing; import Foundation; @testable import Shellmate
+import Testing
+import Foundation
+@testable import Shellmate
+
 @Suite("GeneratorService") struct GeneratorServiceTests {
-    let agent=TestFixtures.sampleAgentSpec(); let empty=TestFixtures.emptyAgentSpec
-    @Test("count") func c() { #expect(GeneratorService.generateAll(agent:agent).count==8) }
-    @Test("unique IDs") func u() { #expect(Set(GeneratorService.generateAll(agent:agent).map{$0.id}).count==8) }
-    @Test("filenames") func f() { for f in GeneratorService.generateAll(agent:agent) { #expect(f.filename.hasSuffix(".md")) } }
-    @Test("expected files") func e() { let n=Set(GeneratorService.generateAll(agent:agent).map{$0.filename}); for x in ["SOUL.md","IDENTITY.md","TOOLS.md","BOUNDARIES.md","ESCALATION.md","MAC.md","MEMORY.md","SYSTEM.md"]{#expect(n.contains(x))} }
-    @Test("no empty") func ne() { for f in GeneratorService.generateAll(agent:agent) { #expect(!f.content.isEmpty) } }
-    @Test("empty spec") func es() { let fs=GeneratorService.generateAll(agent:empty); #expect(fs.count==8); for f in fs{#expect(!f.content.isEmpty)} }
-    @Test("SOUL") func soul() { let c=GeneratorService.generateSOUL(agent:agent); #expect(c.contains(agent.name)); #expect(c.contains(agent.mission)) }
-    @Test("SOUL fallback") func sf() { var a=agent; a.failure=""; #expect(GeneratorService.generateSOUL(agent:a).contains("Not specified")) }
-    @Test("IDENTITY") func id() { #expect(GeneratorService.generateIdentity(agent:agent).contains(agent.name)) }
-    @Test("TOOLS") func t() { let c=GeneratorService.generateTools(agent:agent); for t in ["shell_exec","file_read","file_write","file_list","web_search","web_fetch"]{#expect(c.contains(t))} }
-    @Test("BOUNDARIES") func b() { for r in agent.never{#expect(GeneratorService.generateBoundaries(agent:agent).contains(r))} }
-    @Test("BOUNDARIES empty") func be() { #expect(GeneratorService.generateBoundaries(agent:empty).contains("No specific restrictions")) }
-    @Test("ESCALATION") func esc() { #expect(GeneratorService.generateEscalation(agent:agent).contains(agent.escalation)) }
-    @Test("MAC apps") func m() { for app in agent.macApps{#expect(GeneratorService.generateMac(agent:agent).contains(app))} }
-    @Test("MEMORY") func mem() { #expect(GeneratorService.generateMemory(agent:agent).contains("core memory")) }
-    @Test("SYSTEM") func sys() { let c=GeneratorService.generateSystem(agent:agent); #expect(c.contains(agent.name)); #expect(c.contains("macOS")) }
+    let agent = TestFixtures.sampleAgentSpec()
+    let emptyAgent = TestFixtures.emptyAgentSpec
+
+    @Test("generateAll produces 9 files") func testCount() { #expect(GeneratorService.generateAll(agent: agent).count == 9) }
+    @Test("generateAll unique IDs") func testIDs() { #expect(Set(GeneratorService.generateAll(agent: agent).map(\.id)).count == 9) }
+    @Test("all expected filenames") func testNames() {
+        let n = Set(GeneratorService.generateAll(agent: agent).map(\.filename))
+        #expect(n.contains("SOUL.md")); #expect(n.contains("AGENTS.md")); #expect(n.contains("IDENTITY.md"))
+        #expect(n.contains("USER.md")); #expect(n.contains("TOOLS.md")); #expect(n.contains("BOOTSTRAP.md"))
+        #expect(n.contains("MEMORY.md")); #expect(n.contains("memory/README.md")); #expect(n.contains("skills/README.md"))
+    }
+    @Test("SOUL has name") func s1() { #expect(GeneratorService.generateSOUL(agent: agent).contains("**Buddy**")) }
+    @Test("SOUL has personality") func s2() { #expect(GeneratorService.generateSOUL(agent: agent).contains("## Personality")) }
+    @Test("SOUL has NEVER rules") func s3() { #expect(GeneratorService.generateSOUL(agent: agent).contains("- **NEVER** Delete system files")) }
+    @Test("SOUL empty fallback") func s4() { #expect(GeneratorService.generateSOUL(agent: emptyAgent).contains("**Shellmate**")) }
+    @Test("IDENTITY has name") func i1() { #expect(GeneratorService.generateIdentity(agent: agent).contains("**Name:** Buddy")) }
+    @Test("TOOLS has apps") func t1() { #expect(GeneratorService.generateTools(agent: agent).contains("- Safari")) }
+    @Test("AGENTS has startup") func a1() { #expect(GeneratorService.generateAgents(agent: agent).contains("Read `SOUL.md`")) }
+    @Test("AGENTS has safety") func a2() { #expect(GeneratorService.generateAgents(agent: agent).contains("## Safety Boundaries")) }
+    @Test("USER has apps") func u1() { #expect(GeneratorService.generateUser(agent: agent).contains("**Safari:**")) }
+    @Test("BOOTSTRAP has name") func b1() { #expect(GeneratorService.generateBootstrap(agent: agent).contains("**Buddy**")) }
+    @Test("MEMORY has role") func m1() { #expect(GeneratorService.generateMemory(agent: agent).contains("**Buddy**")) }
+    @Test("memory README") func mr1() { #expect(GeneratorService.generateMemoryReadme().contains("YYYY-MM-DD.md")) }
+    @Test("skills README") func sk1() { #expect(GeneratorService.generateSkillsReadme(agent: agent).contains("clawhub install")) }
 }
