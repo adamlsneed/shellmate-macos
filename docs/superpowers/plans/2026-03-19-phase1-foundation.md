@@ -2698,6 +2698,7 @@ import SwiftUI
 
 struct ConfirmationCardView: View {
     let request: ConfirmationRequest
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2718,12 +2719,12 @@ struct ConfirmationCardView: View {
 
             HStack(spacing: 12) {
                 Button("Approve") {
-                    request.continuation.resume(returning: true); chatState.pendingConfirmation = nil
+                    request.continuation.resume(returning: true); onDismiss()
                 }
                 .buttonStyle(.borderedProminent)
 
                 Button("Deny") {
-                    request.continuation.resume(returning: false); chatState.pendingConfirmation = nil
+                    request.continuation.resume(returning: false); onDismiss()
                 }
                 .buttonStyle(.bordered)
             }
