@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// AI provider selection
 enum AIProvider: String, Codable, CaseIterable, Sendable {
@@ -66,18 +67,71 @@ func isOAuthToken(_ key: String) -> Bool {
 @Observable
 @MainActor
 final class AIConfigState {
+    private static let logger = Logger(subsystem: "com.shellmate.app", category: "ai-config")
+
     var provider: AIProvider = .anthropic
     var model: String = "claude-sonnet-4-20250514"
     var authMethod: AuthMethod = .apiKey
     var isConfigured: Bool = false
+    var isValidatingKey: Bool = false
+    var keyValidationError: String?
 
-    /// Resolve API key: Keychain first, then environment variable.
+    /// Resolve API key using the priority chain:
+    /// 1. OAuth token (if not expired)
+    /// 2. Keychain API key
+    /// 3. Environment variable
+    /// 4. CLAUDE_CODE_OAUTH_TOKEN env var (Anthropic only)
     func resolveApiKey() -> String? {
-        // Try Keychain first
-        if let key = KeychainHelper.read(service: "com.shellmate.api", account: provider.rawValue), !key.isEmpty {
+        if let token = KeychainHelper.readOAuthToken(for: provider) {
+            return token
+        }
+        if let key = KeychainHelper.readApiKey(for: provider), !key.isEmpty {
             return key
         }
-        // Fall back to environment variable
-        return ProcessInfo.processInfo.environment[provider.envKeyName]
+        if let key = ProcessInfo.processInfo.environment[provider.envKeyName], !key.isEmpty {
+            return key
+        }
+        if provider == .anthropic {
+            if let token = ProcessInfo.processInfo.environment["CLAUDE_CODE_OAUTH_TOKEN"], !token.isEmpty {
+                return token
+            }
+        }
+        return nil
+    }
+
+    /// Validate the current API key by making a test call.
+    func validateCurrentKey() async {
+        guard let apiKey = resolveApiKey() else {
+            keyValidationError = "No API key found"
+            isConfigured = false
+            return
+        }
+        isValidatingKey = true
+        keyValidationError = nil
+
+        let result = await AIRouter.validateApiKey(provider: provider, apiKey: apiKey)
+
+        isValidatingKey = false
+        switch result {
+        case .success:
+            isConfigured = true
+            keyValidationError = nil
+            Self.logger.info("API key validated for \(self.provider.rawValue)")
+        case .failure(let error):
+            isConfigured = false
+            keyValidationError = error.localizedDescription
+            Self.logger.warning("API key validation failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Save an API key and validate it.
+    func saveAndValidateKey(_ key: String) async {
+        KeychainHelper.saveApiKey(key, for: provider)
+        if isOAuthToken(key) {
+            authMethod = .oauthToken
+        } else {
+            authMethod = .apiKey
+        }
+        await validateCurrentKey()
     }
 }
