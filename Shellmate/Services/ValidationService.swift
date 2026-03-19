@@ -14,10 +14,11 @@ struct ValidationService: Sendable {
 
     /// Run all validation checks.
     func runAll(aiConfig: AIConfigState) async -> [ValidationCheck] {
-        await [
+        let apiKeyCheck = await checkApiKey(aiConfig: aiConfig)
+        return [
             checkConfig(),
             checkWorkspace(),
-            await checkApiKey(aiConfig: aiConfig),
+            apiKeyCheck,
             checkWebSearch(),
         ]
     }
@@ -47,7 +48,7 @@ struct ValidationService: Sendable {
     @MainActor
     func checkApiKey(aiConfig: AIConfigState) -> ValidationCheck {
         let key = aiConfig.resolveApiKey()
-        let hasKey = key != nil && !key!.isEmpty
+        let hasKey = key.map({ !$0.isEmpty }) ?? false
         return ValidationCheck(
             id: "apiKey",
             name: "API Key",
@@ -59,7 +60,7 @@ struct ValidationService: Sendable {
     /// Check that Brave Search API key is available (optional).
     func checkWebSearch() -> ValidationCheck {
         let key = ProcessInfo.processInfo.environment["BRAVE_API_KEY"]
-        let hasKey = key != nil && !key!.isEmpty
+        let hasKey = key.map({ !$0.isEmpty }) ?? false
         return ValidationCheck(
             id: "webSearch",
             name: "Web Search",

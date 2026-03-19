@@ -34,7 +34,7 @@ struct SettingsView: View {
         }.padding().onAppear { let cs = ConfigService(); guard let c = try? cs.readConfig() else { return }; let d = c.capabilities.tools.deny; aE = !d.contains("exec"); aW = !d.contains("write"); aB = !d.contains("browser") }
     }
     private var appearTab: some View { Form { Section("Theme") { Text("Follows system appearance.").foregroundStyle(.secondary) } }.padding() }
-    // BRIDGE: NSWorkspace required for opening Finder
+    // BRIDGE: NSWorkspace.shared.open — SwiftUI has no API to open a directory in Finder
     private var advTab: some View {
         Form {
             Section("Configuration") { LabeledContent("Config") { Text("~/.shellmate/shellmate.json").font(.system(.body, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled) }; Button("Open in Finder") { NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".shellmate")) } }

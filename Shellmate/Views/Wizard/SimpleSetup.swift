@@ -27,4 +27,3 @@ struct SimpleSetup: View {
     }
     private func done() { var c: ShellmateConfig; do { c = try cs.readConfig() } catch { c = ShellmateConfig() }; c.setupComplete = true; try? cs.writeConfig(c); appState.completeSetup() }
 }
-extension Notification.Name { static let shellmateSpecComplete = Notification.Name("shellmateSpecComplete") }

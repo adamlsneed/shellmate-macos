@@ -12,5 +12,6 @@ Log of every AppKit usage with reason and future SwiftUI replacement path.
 | `Services/Platform/ExternalLinkHandler.swift` | `NSWorkspace.shared.open(url)` | SwiftUI has no native open-in-system-browser API | When SwiftUI adds `openURL` for external browser (not in-app) |
 | `Services/Platform/AppLifecycleManager.swift` | `NSApplicationDelegate` (`applicationShouldHandleReopen`, `applicationWillTerminate`) | SwiftUI does not expose dock-click or pre-termination hooks | When SwiftUI adds full lifecycle callbacks |
 | `ShellmateApp.swift` | `@NSApplicationDelegateAdaptor(AppLifecycleManager.self)` | Required to register the `NSApplicationDelegate` for lifecycle events | Same as above |
+| `Views/Settings/SettingsView.swift` | `NSWorkspace.shared.open(url)` | SwiftUI has no API to open a directory in Finder | When SwiftUI adds Finder integration |
 
 <!-- Add new entries here as bridges are created -->

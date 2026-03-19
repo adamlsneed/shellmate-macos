@@ -17,7 +17,9 @@ enum WebSearchTool {
 
         let count = min((input["count"] as? Int) ?? 5, 20)
 
-        var components = URLComponents(string: baseURL)!
+        guard var components = URLComponents(string: baseURL) else {
+            return ToolExecutionResult(content: "Invalid search base URL", isError: true)
+        }
         components.queryItems = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "count", value: "\(count)"),

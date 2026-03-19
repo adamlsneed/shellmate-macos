@@ -2,8 +2,8 @@
 
 ## Summary
 
-**Total tests:** 103
-**Total suites:** 20
+**Total tests:** 165
+**Total suites:** 32
 **Framework:** Swift Testing (`import Testing`, `@Test`, `#expect`, `@Suite`)
 **All tests pass:** Yes (`swift test` exits 0)
 
