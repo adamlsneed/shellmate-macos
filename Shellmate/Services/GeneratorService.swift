@@ -82,4 +82,10 @@ enum GeneratorService {
         } else { installLines = "# Add workspace-local skills here\n# clawhub install <skill-id>" }
         return "# Workspace Skills \u{2014} \(name)\n\nSkills placed in this folder are **local to this agent only** and override any global skill with the same name.\n\n## How to install a skill into this workspace\n\n```bash\n# From inside this workspace directory:\nclawhub install <skill-id>\n\n# Or specify the workspace explicitly:\nclawhub install <skill-id> --workdir ~/.shellmate/workspace\n```\n\n## Recommended skills for this agent\n\n\(installLines)\n\n## Notes\n\n- Skills here take precedence over bundled and managed (~/.shellmate/skills) skills of the same name.\n- After installing, restart Shellmate (or start a new session) for the skill to take effect.\n- Browse all available skills at https://clawhub.ai\n"
     }
+
+    /// System prompt for chat preview (combines identity + mission + tool guidelines).
+    static func generateSystem(agent: AgentSpec) -> String {
+        let name = agent.name.isEmpty ? "Shellmate" : agent.name
+        return "You are \(name). \(agent.personality)\n\nYour mission: \(agent.mission)\n\nYou are running on macOS. You have access to shell commands, file operations, and web tools. Always be helpful, clear, and safe.\n\nWhen using tools:\n1. Explain what you're about to do\n2. Ask for confirmation before destructive changes\n3. Show results clearly"
+    }
 }

@@ -25,4 +25,15 @@ enum TestFixtures {
         return url
     }
     static func cleanupTempDir(_ url: URL) { try? FileManager.default.removeItem(at: url) }
+
+    static var complexJSONValue: JSONValue {
+        .object([
+            "name": .string("test"),
+            "count": .int(42),
+            "active": .bool(true),
+            "tags": .array([.string("a"), .string("b")]),
+            "nested": .object(["key": .string("value")]),
+            "nothing": .null
+        ])
+    }
 }
