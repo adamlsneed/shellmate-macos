@@ -1,4 +1,4 @@
-import EventKit
+@preconcurrency import EventKit
 import Foundation
 
 // MARK: - CalendarServiceError
@@ -26,6 +26,26 @@ enum CalendarServiceError: Error, LocalizedError {
     }
 }
 
+// MARK: - CalendarEventInfo
+
+/// Sendable snapshot of an EKEvent for crossing actor boundaries.
+struct CalendarEventInfo: Sendable {
+    let title: String
+    let startDate: Date
+    let endDate: Date
+    let location: String?
+    let calendarName: String?
+    let notes: String?
+}
+
+// MARK: - CalendarInfo
+
+/// Sendable snapshot of an EKCalendar.
+struct CalendarInfo: Sendable {
+    let title: String
+    let type: String
+}
+
 // MARK: - CalendarService
 
 /// Actor wrapping EKEventStore for thread-safe calendar operations.
@@ -39,13 +59,13 @@ actor CalendarService {
             try await store.requestFullAccessToEvents()
         }
         let updated = EKEventStore.authorizationStatus(for: .event)
-        guard updated == .fullAccess || updated == .authorized else {
+        guard updated == .fullAccess else {
             throw CalendarServiceError.accessDenied
         }
     }
 
     /// Fetches events in the given date range, optionally filtered by calendar name.
-    func events(from start: Date, to end: Date, calendarName: String?) async throws -> [EKEvent] {
+    func events(from start: Date, to end: Date, calendarName: String?) async throws -> [CalendarEventInfo] {
         try await ensureAccess()
         let calendars: [EKCalendar]?
         if let name = calendarName {
@@ -57,10 +77,10 @@ actor CalendarService {
             calendars = nil
         }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
-        return store.events(matching: predicate)
+        return store.events(matching: predicate).map { snapshot($0) }
     }
 
-    /// Creates a new calendar event and returns it.
+    /// Creates a new calendar event and returns a snapshot.
     func createEvent(
         title: String,
         startDate: Date,
@@ -68,7 +88,7 @@ actor CalendarService {
         calendarName: String?,
         location: String?,
         notes: String?
-    ) async throws -> EKEvent {
+    ) async throws -> CalendarEventInfo {
         try await ensureAccess()
         let event = EKEvent(eventStore: store)
         event.title = title
@@ -94,7 +114,7 @@ actor CalendarService {
         } catch {
             throw CalendarServiceError.saveFailed(error.localizedDescription)
         }
-        return event
+        return snapshot(event)
     }
 
     /// Searches for an event matching the query and applies updates.
@@ -105,7 +125,7 @@ actor CalendarService {
         newEndDate: Date?,
         newLocation: String?,
         newNotes: String?
-    ) async throws -> EKEvent {
+    ) async throws -> CalendarEventInfo {
         try await ensureAccess()
         let event = try findEvent(matching: query)
 
@@ -120,7 +140,7 @@ actor CalendarService {
         } catch {
             throw CalendarServiceError.saveFailed(error.localizedDescription)
         }
-        return event
+        return snapshot(event)
     }
 
     /// Searches for and deletes an event matching the query.
@@ -137,15 +157,27 @@ actor CalendarService {
     }
 
     /// Returns all user-visible calendars for events.
-    func allCalendars() async throws -> [EKCalendar] {
+    func allCalendars() async throws -> [CalendarInfo] {
         try await ensureAccess()
-        return store.calendars(for: .event)
+        return store.calendars(for: .event).map {
+            CalendarInfo(title: $0.title, type: $0.type.rawValue == 0 ? "local" : "calDAV")
+        }
     }
 
     // MARK: - Private
 
+    private func snapshot(_ event: EKEvent) -> CalendarEventInfo {
+        CalendarEventInfo(
+            title: event.title ?? "Untitled",
+            startDate: event.startDate,
+            endDate: event.endDate,
+            location: event.location,
+            calendarName: event.calendar?.title,
+            notes: event.notes
+        )
+    }
+
     private func findEvent(matching query: String) throws -> EKEvent {
-        // Search within a 1-year window centered on now
         let now = Date()
         let calendar = Calendar.current
         guard let start = calendar.date(byAdding: .month, value: -6, to: now),

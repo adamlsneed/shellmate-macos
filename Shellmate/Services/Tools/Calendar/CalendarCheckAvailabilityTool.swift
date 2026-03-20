@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - CalendarCheckAvailabilityTool
@@ -72,17 +71,16 @@ struct CalendarCheckAvailabilityTool: AgentTool {
             // Show busy blocks
             let sorted = events.sorted { $0.startDate < $1.startDate }
             if sorted.isEmpty {
-                lines.append("No events scheduled — fully available.")
+                lines.append("No events scheduled \u{2014} fully available.")
             } else {
                 lines.append("Busy:")
                 for event in sorted {
-                    let title = event.title ?? "Untitled"
-                    lines.append("  • \(formatter.string(from: event.startDate)) – \(formatter.string(from: event.endDate)): \(title)")
+                    lines.append("  \u{2022} \(formatter.string(from: event.startDate)) \u{2013} \(formatter.string(from: event.endDate)): \(event.title)")
                 }
 
                 // Compute free blocks during working hours
                 lines.append("")
-                lines.append("Free blocks (working hours 8 AM – 6 PM, ≥\(formatDuration(minDuration))):")
+                lines.append("Free blocks (working hours 8 AM \u{2013} 6 PM, \u{2265}\(formatDuration(minDuration))):")
                 let freeBlocks = computeFreeBlocks(
                     events: sorted,
                     rangeStart: workStart,
@@ -94,7 +92,7 @@ struct CalendarCheckAvailabilityTool: AgentTool {
                 } else {
                     for (start, end) in freeBlocks {
                         let dur = end.timeIntervalSince(start)
-                        lines.append("  • \(formatter.string(from: start)) – \(formatter.string(from: end)) (\(formatDuration(dur)))")
+                        lines.append("  \u{2022} \(formatter.string(from: start)) \u{2013} \(formatter.string(from: end)) (\(formatDuration(dur)))")
                     }
                 }
             }
@@ -106,7 +104,7 @@ struct CalendarCheckAvailabilityTool: AgentTool {
     }
 
     private func computeFreeBlocks(
-        events: [EKEvent],
+        events: [CalendarEventInfo],
         rangeStart: Date,
         rangeEnd: Date,
         minDuration: TimeInterval

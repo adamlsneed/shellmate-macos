@@ -1,4 +1,3 @@
-import Contacts
 import Foundation
 
 // MARK: - ContactsGetDetailTool
@@ -39,7 +38,7 @@ struct ContactsGetDetailTool: AgentTool {
         }
     }
 
-    private func formatDetailedContact(_ contact: CNContact) -> String {
+    private func formatDetailedContact(_ contact: ContactInfo) -> String {
         var parts: [String] = []
         let name = [contact.givenName, contact.middleName, contact.familyName]
             .filter { !$0.isEmpty }
@@ -53,43 +52,38 @@ struct ContactsGetDetailTool: AgentTool {
             parts.append("Job Title: \(contact.jobTitle)")
         }
 
-        if !contact.phoneNumbers.isEmpty {
+        if !contact.phones.isEmpty {
             parts.append("\nPhone Numbers:")
-            for phone in contact.phoneNumbers {
-                let label = CNLabeledValue<NSString>.localizedString(forLabel: phone.label ?? "other")
-                parts.append("  \(label): \(phone.value.stringValue)")
+            for phone in contact.phones {
+                parts.append("  \(phone.label): \(phone.value)")
             }
         }
 
-        if !contact.emailAddresses.isEmpty {
+        if !contact.emails.isEmpty {
             parts.append("\nEmail Addresses:")
-            for email in contact.emailAddresses {
-                let label = CNLabeledValue<NSString>.localizedString(forLabel: email.label ?? "other")
-                parts.append("  \(label): \(email.value as String)")
+            for email in contact.emails {
+                parts.append("  \(email.label): \(email.value)")
             }
         }
 
-        if !contact.postalAddresses.isEmpty {
+        if !contact.addresses.isEmpty {
             parts.append("\nAddresses:")
-            for address in contact.postalAddresses {
-                let label = CNLabeledValue<NSString>.localizedString(forLabel: address.label ?? "other")
-                let formatted = CNPostalAddressFormatter.string(from: address.value, style: .mailingAddress)
-                parts.append("  \(label): \(formatted)")
+            for address in contact.addresses {
+                parts.append("  \(address.label): \(address.value)")
             }
         }
 
-        if !contact.urlAddresses.isEmpty {
+        if !contact.urls.isEmpty {
             parts.append("\nURLs:")
-            for url in contact.urlAddresses {
-                let label = CNLabeledValue<NSString>.localizedString(forLabel: url.label ?? "other")
-                parts.append("  \(label): \(url.value as String)")
+            for url in contact.urls {
+                parts.append("  \(url.label): \(url.value)")
             }
         }
 
-        if let birthday = contact.birthday, let date = Calendar.current.date(from: birthday) {
+        if let birthday = contact.birthday {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
-            parts.append("\nBirthday: \(formatter.string(from: date))")
+            parts.append("\nBirthday: \(formatter.string(from: birthday))")
         }
 
         if !contact.note.isEmpty {

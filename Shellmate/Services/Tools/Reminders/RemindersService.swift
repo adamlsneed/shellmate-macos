@@ -1,4 +1,4 @@
-import EventKit
+@preconcurrency import EventKit
 import Foundation
 
 // MARK: - RemindersServiceError
@@ -29,6 +29,25 @@ enum RemindersServiceError: Error, LocalizedError {
     }
 }
 
+// MARK: - ReminderInfo
+
+/// Sendable snapshot of an EKReminder for crossing actor boundaries.
+struct ReminderInfo: Sendable {
+    let title: String
+    let isCompleted: Bool
+    let dueDate: Date?
+    let priority: Int
+    let listName: String?
+    let notes: String?
+}
+
+// MARK: - ReminderListInfo
+
+/// Sendable snapshot of a reminder list (EKCalendar).
+struct ReminderListInfo: Sendable {
+    let title: String
+}
+
 // MARK: - RemindersService
 
 /// Actor wrapping EKEventStore for thread-safe reminder operations.
@@ -42,13 +61,13 @@ actor RemindersService {
             try await store.requestFullAccessToReminders()
         }
         let updated = EKEventStore.authorizationStatus(for: .reminder)
-        guard updated == .fullAccess || updated == .authorized else {
+        guard updated == .fullAccess else {
             throw RemindersServiceError.accessDenied
         }
     }
 
     /// Fetches reminders from a specific list (or all lists).
-    func reminders(inList listName: String?, includeCompleted: Bool) async throws -> [EKReminder] {
+    func reminders(inList listName: String?, includeCompleted: Bool) async throws -> [ReminderInfo] {
         try await ensureAccess()
         let calendars: [EKCalendar]?
         if let name = listName {
@@ -62,10 +81,8 @@ actor RemindersService {
         let predicate = store.predicateForReminders(in: calendars)
         let all = try await fetchReminders(matching: predicate)
 
-        if includeCompleted {
-            return all
-        }
-        return all.filter { !$0.isCompleted }
+        let filtered = includeCompleted ? all : all.filter { !$0.isCompleted }
+        return filtered.map { snapshot($0) }
     }
 
     /// Creates a new reminder.
@@ -75,7 +92,7 @@ actor RemindersService {
         dueDate: Date?,
         priority: Int?,
         notes: String?
-    ) async throws -> EKReminder {
+    ) async throws -> ReminderInfo {
         try await ensureAccess()
         let reminder = EKReminder(eventStore: store)
         reminder.title = title
@@ -110,7 +127,7 @@ actor RemindersService {
         } catch {
             throw RemindersServiceError.saveFailed(error.localizedDescription)
         }
-        return reminder
+        return snapshot(reminder)
     }
 
     /// Marks a reminder as completed.
@@ -134,7 +151,7 @@ actor RemindersService {
         newDueDate: Date?,
         newPriority: Int?,
         newNotes: String?
-    ) async throws -> EKReminder {
+    ) async throws -> ReminderInfo {
         try await ensureAccess()
         let reminder = try await findReminder(matching: query)
 
@@ -154,7 +171,7 @@ actor RemindersService {
         } catch {
             throw RemindersServiceError.saveFailed(error.localizedDescription)
         }
-        return reminder
+        return snapshot(reminder)
     }
 
     /// Deletes a reminder matching the query.
@@ -171,19 +188,37 @@ actor RemindersService {
     }
 
     /// Returns all reminder lists.
-    func allLists() async throws -> [EKCalendar] {
+    func allLists() async throws -> [ReminderListInfo] {
         try await ensureAccess()
-        return store.calendars(for: .reminder)
+        return store.calendars(for: .reminder).map { ReminderListInfo(title: $0.title) }
     }
 
     // MARK: - Private
+
+    private func snapshot(_ reminder: EKReminder) -> ReminderInfo {
+        var dueDate: Date?
+        if let components = reminder.dueDateComponents {
+            dueDate = Calendar.current.date(from: components)
+        }
+        return ReminderInfo(
+            title: reminder.title ?? "Untitled",
+            isCompleted: reminder.isCompleted,
+            dueDate: dueDate,
+            priority: reminder.priority,
+            listName: reminder.calendar?.title,
+            notes: reminder.notes
+        )
+    }
 
     /// Wraps the callback-based fetchReminders into async.
     private func fetchReminders(matching predicate: NSPredicate) async throws -> [EKReminder] {
         try await withCheckedThrowingContinuation { continuation in
             store.fetchReminders(matching: predicate) { reminders in
                 if let reminders {
-                    continuation.resume(returning: reminders)
+                    // Copy into a nonisolated(unsafe) binding to cross the sendability boundary.
+                    // This is safe because the callback is the only consumer of the array.
+                    nonisolated(unsafe) let result = reminders
+                    continuation.resume(returning: result)
                 } else {
                     continuation.resume(throwing: RemindersServiceError.fetchFailed)
                 }

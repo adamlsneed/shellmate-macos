@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - CalendarModifyEventTool
@@ -82,7 +81,7 @@ struct CalendarModifyEventTool: AgentTool {
                 newLocation: newLocation,
                 newNotes: newNotes
             )
-            return .success("Modified event '\(event.title ?? query)' successfully.")
+            return .success("Modified event '\(event.title)' successfully.")
         } catch {
             return .error(error.localizedDescription)
         }

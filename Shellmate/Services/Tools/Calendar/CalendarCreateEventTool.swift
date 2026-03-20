@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - CalendarCreateEventTool
@@ -97,8 +96,8 @@ struct CalendarCreateEventTool: AgentTool {
             formatter.timeStyle = .short
             let startStr = formatter.string(from: event.startDate)
             let endStr = formatter.string(from: event.endDate)
-            var result = "Created event '\(event.title ?? title)' from \(startStr) to \(endStr)"
-            if let cal = event.calendar?.title { result += " in calendar '\(cal)'" }
+            var result = "Created event '\(event.title)' from \(startStr) to \(endStr)"
+            if let cal = event.calendarName { result += " in calendar '\(cal)'" }
             result += "."
             return .success(result)
         } catch {

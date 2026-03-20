@@ -1,4 +1,3 @@
-import Contacts
 import Foundation
 
 // MARK: - ContactsCreateTool
@@ -60,8 +59,7 @@ struct ContactsCreateTool: AgentTool {
                 emails: emails?.map { (label: $0.0, address: $0.1) },
                 organization: organization
             )
-            let name = [contact.givenName, contact.familyName].filter { !$0.isEmpty }.joined(separator: " ")
-            return .success("Created contact '\(name)'.")
+            return .success("Created contact '\(contact.displayName)'.")
         } catch {
             return .error(error.localizedDescription)
         }

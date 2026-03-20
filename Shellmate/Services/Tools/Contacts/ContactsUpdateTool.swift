@@ -1,4 +1,3 @@
-import Contacts
 import Foundation
 
 // MARK: - ContactsUpdateTool
@@ -66,8 +65,7 @@ struct ContactsUpdateTool: AgentTool {
                 newPhones: newPhones?.map { (label: $0.0, number: $0.1) },
                 newEmails: newEmails?.map { (label: $0.0, address: $0.1) }
             )
-            let name = [contact.givenName, contact.familyName].filter { !$0.isEmpty }.joined(separator: " ")
-            return .success("Updated contact '\(name)'.")
+            return .success("Updated contact '\(contact.displayName)'.")
         } catch {
             return .error(error.localizedDescription)
         }

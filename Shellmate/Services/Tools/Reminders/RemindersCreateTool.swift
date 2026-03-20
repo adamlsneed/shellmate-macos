@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - RemindersCreateTool
@@ -78,14 +77,14 @@ struct RemindersCreateTool: AgentTool {
                 priority: priority,
                 notes: notes
             )
-            var result = "Created reminder '\(reminder.title ?? title)'"
-            if let due = dueDate {
+            var result = "Created reminder '\(reminder.title)'"
+            if let due = reminder.dueDate {
                 let formatter = DateFormatter()
                 formatter.dateStyle = .medium
                 formatter.timeStyle = .short
                 result += " due \(formatter.string(from: due))"
             }
-            if let list = reminder.calendar?.title {
+            if let list = reminder.listName {
                 result += " in list '\(list)'"
             }
             result += "."

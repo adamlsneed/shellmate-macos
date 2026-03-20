@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - CalendarListEventsTool
@@ -64,15 +63,14 @@ struct CalendarListEventsTool: AgentTool {
         }
     }
 
-    private func formatEvent(_ event: EKEvent) -> String {
-        let title = event.title ?? "Untitled"
+    private func formatEvent(_ event: CalendarEventInfo) -> String {
         let start = formatDateTime(event.startDate)
         let end = formatDateTime(event.endDate)
-        var line = "• \(title) — \(start) to \(end)"
+        var line = "\u{2022} \(event.title) \u{2014} \(start) to \(end)"
         if let location = event.location, !location.isEmpty {
             line += " @ \(location)"
         }
-        if let calendar = event.calendar?.title {
+        if let calendar = event.calendarName {
             line += " [\(calendar)]"
         }
         return line

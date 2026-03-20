@@ -1,6 +1,6 @@
 import AppKit
-import Contacts
-import EventKit
+@preconcurrency import Contacts
+@preconcurrency import EventKit
 import Foundation
 
 // MARK: - PermissionManager

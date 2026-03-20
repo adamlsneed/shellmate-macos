@@ -1,4 +1,3 @@
-import Contacts
 import Foundation
 
 // MARK: - ContactsSearchTool
@@ -48,21 +47,18 @@ struct ContactsSearchTool: AgentTool {
         }
     }
 
-    private func formatContact(_ contact: CNContact) -> String {
+    private func formatContact(_ contact: ContactInfo) -> String {
         var parts: [String] = []
-        let name = [contact.givenName, contact.familyName].filter { !$0.isEmpty }.joined(separator: " ")
-        parts.append("**\(name.isEmpty ? "No Name" : name)** (id: \(contact.identifier))")
+        parts.append("**\(contact.displayName)** (id: \(contact.identifier))")
 
         if !contact.organizationName.isEmpty {
             parts.append("  Organization: \(contact.organizationName)")
         }
-        for phone in contact.phoneNumbers {
-            let label = CNLabeledValue<NSString>.localizedString(forLabel: phone.label ?? "other")
-            parts.append("  Phone (\(label)): \(phone.value.stringValue)")
+        for phone in contact.phones {
+            parts.append("  Phone (\(phone.label)): \(phone.value)")
         }
-        for email in contact.emailAddresses {
-            let label = CNLabeledValue<NSString>.localizedString(forLabel: email.label ?? "other")
-            parts.append("  Email (\(label)): \(email.value as String)")
+        for email in contact.emails {
+            parts.append("  Email (\(email.label)): \(email.value)")
         }
         return parts.joined(separator: "\n")
     }

@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - RemindersListTool
@@ -47,16 +46,14 @@ struct RemindersListTool: AgentTool {
         }
     }
 
-    private func formatReminder(_ reminder: EKReminder) -> String {
-        let title = reminder.title ?? "Untitled"
+    private func formatReminder(_ reminder: ReminderInfo) -> String {
         let status = reminder.isCompleted ? "[done]" : "[  ]"
-        var line = "\(status) \(title)"
-        if let due = reminder.dueDateComponents,
-           let date = Calendar.current.date(from: due) {
+        var line = "\(status) \(reminder.title)"
+        if let due = reminder.dueDate {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
             formatter.timeStyle = .short
-            line += " — due \(formatter.string(from: date))"
+            line += " \u{2014} due \(formatter.string(from: due))"
         }
         if reminder.priority > 0 {
             let label = switch reminder.priority {
@@ -66,8 +63,8 @@ struct RemindersListTool: AgentTool {
             }
             line += " (\(label) priority)"
         }
-        if let cal = reminder.calendar?.title {
-            line += " [\(cal)]"
+        if let listName = reminder.listName {
+            line += " [\(listName)]"
         }
         return line
     }

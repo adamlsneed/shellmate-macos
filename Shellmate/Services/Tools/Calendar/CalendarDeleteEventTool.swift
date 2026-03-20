@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - CalendarDeleteEventTool

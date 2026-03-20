@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - RemindersListListsTool
@@ -27,7 +26,7 @@ struct RemindersListListsTool: AgentTool {
             if lists.isEmpty {
                 return .success("No reminder lists found.")
             }
-            let lines = lists.map { "• \($0.title)" }
+            let lines = lists.map { "\u{2022} \($0.title)" }
             return .success("Reminder lists (\(lists.count)):\n\n" + lines.joined(separator: "\n"))
         } catch {
             return .error(error.localizedDescription)

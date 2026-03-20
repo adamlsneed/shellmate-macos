@@ -1,4 +1,3 @@
-import EventKit
 import Foundation
 
 // MARK: - RemindersModifyTool
@@ -79,7 +78,7 @@ struct RemindersModifyTool: AgentTool {
                 newPriority: newPriority,
                 newNotes: newNotes
             )
-            return .success("Modified reminder '\(reminder.title ?? query)' successfully.")
+            return .success("Modified reminder '\(reminder.title)' successfully.")
         } catch {
             return .error(error.localizedDescription)
         }

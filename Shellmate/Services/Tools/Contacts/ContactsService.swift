@@ -1,4 +1,4 @@
-import Contacts
+@preconcurrency import Contacts
 import Foundation
 
 // MARK: - ContactsServiceError
@@ -23,6 +23,29 @@ enum ContactsServiceError: Error, LocalizedError {
     }
 }
 
+// MARK: - ContactInfo
+
+/// Sendable snapshot of a CNContact for crossing actor boundaries.
+struct ContactInfo: Sendable {
+    let identifier: String
+    let givenName: String
+    let middleName: String
+    let familyName: String
+    let organizationName: String
+    let jobTitle: String
+    let phones: [(label: String, value: String)]
+    let emails: [(label: String, value: String)]
+    let addresses: [(label: String, value: String)]
+    let urls: [(label: String, value: String)]
+    let birthday: Date?
+    let note: String
+
+    var displayName: String {
+        let parts = [givenName, familyName].filter { !$0.isEmpty }
+        return parts.isEmpty ? "No Name" : parts.joined(separator: " ")
+    }
+}
+
 // MARK: - ContactsService
 
 /// Actor wrapping CNContactStore for thread-safe contact operations.
@@ -30,30 +53,34 @@ actor ContactsService {
     private let store = CNContactStore()
 
     /// Keys to fetch for search results (summary info).
-    private static let searchKeys: [CNKeyDescriptor] = [
-        CNContactIdentifierKey as CNKeyDescriptor,
-        CNContactGivenNameKey as CNKeyDescriptor,
-        CNContactFamilyNameKey as CNKeyDescriptor,
-        CNContactOrganizationNameKey as CNKeyDescriptor,
-        CNContactPhoneNumbersKey as CNKeyDescriptor,
-        CNContactEmailAddressesKey as CNKeyDescriptor,
-    ]
+    private var searchKeys: [CNKeyDescriptor] {
+        [
+            CNContactIdentifierKey as CNKeyDescriptor,
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactOrganizationNameKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
+        ]
+    }
 
     /// Keys to fetch for detailed info.
-    private static let detailKeys: [CNKeyDescriptor] = [
-        CNContactIdentifierKey as CNKeyDescriptor,
-        CNContactGivenNameKey as CNKeyDescriptor,
-        CNContactFamilyNameKey as CNKeyDescriptor,
-        CNContactMiddleNameKey as CNKeyDescriptor,
-        CNContactOrganizationNameKey as CNKeyDescriptor,
-        CNContactJobTitleKey as CNKeyDescriptor,
-        CNContactPhoneNumbersKey as CNKeyDescriptor,
-        CNContactEmailAddressesKey as CNKeyDescriptor,
-        CNContactPostalAddressesKey as CNKeyDescriptor,
-        CNContactUrlAddressesKey as CNKeyDescriptor,
-        CNContactBirthdayKey as CNKeyDescriptor,
-        CNContactNoteKey as CNKeyDescriptor,
-    ]
+    private var detailKeys: [CNKeyDescriptor] {
+        [
+            CNContactIdentifierKey as CNKeyDescriptor,
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactMiddleNameKey as CNKeyDescriptor,
+            CNContactOrganizationNameKey as CNKeyDescriptor,
+            CNContactJobTitleKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
+            CNContactPostalAddressesKey as CNKeyDescriptor,
+            CNContactUrlAddressesKey as CNKeyDescriptor,
+            CNContactBirthdayKey as CNKeyDescriptor,
+            CNContactNoteKey as CNKeyDescriptor,
+        ]
+    }
 
     /// Ensures we have access to contacts, requesting if needed.
     func ensureAccess() async throws {
@@ -68,22 +95,23 @@ actor ContactsService {
     }
 
     /// Searches contacts by name.
-    func search(query: String, limit: Int = 20) async throws -> [CNContact] {
+    func search(query: String, limit: Int = 20) async throws -> [ContactInfo] {
         try await ensureAccess()
         let predicate = CNContact.predicateForContacts(matchingName: query)
         do {
-            let results = try store.unifiedContacts(matching: predicate, keysToFetch: Self.searchKeys)
-            return Array(results.prefix(limit))
+            let results = try store.unifiedContacts(matching: predicate, keysToFetch: searchKeys)
+            return Array(results.prefix(limit)).map { searchSnapshot($0) }
         } catch {
             throw ContactsServiceError.fetchFailed(error.localizedDescription)
         }
     }
 
     /// Gets detailed info for a contact by identifier.
-    func getDetail(identifier: String) async throws -> CNContact {
+    func getDetail(identifier: String) async throws -> ContactInfo {
         try await ensureAccess()
         do {
-            return try store.unifiedContact(withIdentifier: identifier, keysToFetch: Self.detailKeys)
+            let contact = try store.unifiedContact(withIdentifier: identifier, keysToFetch: detailKeys)
+            return detailSnapshot(contact)
         } catch {
             throw ContactsServiceError.contactNotFound(identifier)
         }
@@ -96,7 +124,7 @@ actor ContactsService {
         phones: [(label: String, number: String)]?,
         emails: [(label: String, address: String)]?,
         organization: String?
-    ) async throws -> CNContact {
+    ) async throws -> ContactInfo {
         try await ensureAccess()
         let contact = CNMutableContact()
         contact.givenName = firstName
@@ -121,7 +149,7 @@ actor ContactsService {
         } catch {
             throw ContactsServiceError.saveFailed(error.localizedDescription)
         }
-        return contact
+        return searchSnapshot(contact)
     }
 
     /// Updates an existing contact.
@@ -132,11 +160,11 @@ actor ContactsService {
         newOrganization: String?,
         newPhones: [(label: String, number: String)]?,
         newEmails: [(label: String, address: String)]?
-    ) async throws -> CNContact {
+    ) async throws -> ContactInfo {
         try await ensureAccess()
         let contact: CNContact
         do {
-            contact = try store.unifiedContact(withIdentifier: identifier, keysToFetch: Self.detailKeys)
+            contact = try store.unifiedContact(withIdentifier: identifier, keysToFetch: detailKeys)
         } catch {
             throw ContactsServiceError.contactNotFound(identifier)
         }
@@ -166,10 +194,62 @@ actor ContactsService {
         } catch {
             throw ContactsServiceError.saveFailed(error.localizedDescription)
         }
-        return mutable
+        return searchSnapshot(mutable)
     }
 
     // MARK: - Private
+
+    private func searchSnapshot(_ contact: CNContact) -> ContactInfo {
+        ContactInfo(
+            identifier: contact.identifier,
+            givenName: contact.givenName,
+            middleName: "",
+            familyName: contact.familyName,
+            organizationName: contact.organizationName,
+            jobTitle: "",
+            phones: contact.phoneNumbers.map { labeled in
+                (label: CNLabeledValue<NSString>.localizedString(forLabel: labeled.label ?? "other"),
+                 value: labeled.value.stringValue)
+            },
+            emails: contact.emailAddresses.map { labeled in
+                (label: CNLabeledValue<NSString>.localizedString(forLabel: labeled.label ?? "other"),
+                 value: labeled.value as String)
+            },
+            addresses: [],
+            urls: [],
+            birthday: nil,
+            note: ""
+        )
+    }
+
+    private func detailSnapshot(_ contact: CNContact) -> ContactInfo {
+        ContactInfo(
+            identifier: contact.identifier,
+            givenName: contact.givenName,
+            middleName: contact.middleName,
+            familyName: contact.familyName,
+            organizationName: contact.organizationName,
+            jobTitle: contact.jobTitle,
+            phones: contact.phoneNumbers.map { labeled in
+                (label: CNLabeledValue<NSString>.localizedString(forLabel: labeled.label ?? "other"),
+                 value: labeled.value.stringValue)
+            },
+            emails: contact.emailAddresses.map { labeled in
+                (label: CNLabeledValue<NSString>.localizedString(forLabel: labeled.label ?? "other"),
+                 value: labeled.value as String)
+            },
+            addresses: contact.postalAddresses.map { labeled in
+                (label: CNLabeledValue<NSString>.localizedString(forLabel: labeled.label ?? "other"),
+                 value: CNPostalAddressFormatter.string(from: labeled.value, style: .mailingAddress))
+            },
+            urls: contact.urlAddresses.map { labeled in
+                (label: CNLabeledValue<NSString>.localizedString(forLabel: labeled.label ?? "other"),
+                 value: labeled.value as String)
+            },
+            birthday: contact.birthday.flatMap { Calendar.current.date(from: $0) },
+            note: contact.note
+        )
+    }
 
     private func mapLabel(_ label: String) -> String {
         switch label.lowercased() {
