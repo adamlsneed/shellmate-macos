@@ -131,7 +131,7 @@ struct ShellServiceTests {
         let service = ShellService()
         let provider = ShellProvider(shellService: service)
         #expect(provider.category == .shell)
-        #expect(provider.tools.count == 1)
+        #expect(provider.tools.count == 7)
         #expect(provider.tools[0].identifier == "shell_exec")
     }
 }

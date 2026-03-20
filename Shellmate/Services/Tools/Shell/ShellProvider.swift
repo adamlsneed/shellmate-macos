@@ -8,5 +8,15 @@ struct ShellProvider: ToolProvider {
     private let shellService: ShellService
     init(shellService: ShellService) { self.shellService = shellService }
 
-    var tools: [AgentTool] { [ShellExecuteTool(service: shellService)] }
+    var tools: [AgentTool] {
+        [
+            ShellExecuteTool(service: shellService),
+            ShellScriptTool(service: shellService),
+            ShellEnvironmentTool(service: shellService),
+            ShellHistoryTool(service: shellService),
+            EnvCheckPathTool(service: shellService),
+            SetupHomebrewTool(service: shellService),
+            SetupDeveloperToolsTool(service: shellService),
+        ]
+    }
 }
