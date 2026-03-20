@@ -24,6 +24,13 @@ actor ToolUseLoop {
         case error(String)
     }
 
+    /// A tool call being assembled from streaming events.
+    private struct PendingToolCall {
+        let id: String
+        let name: String
+        var inputJSON: String = ""
+    }
+
     /// Run the agentic tool-use loop.
     /// Supports cancellation via Task.cancel() -- checks at each round boundary.
     func run(
@@ -57,7 +64,7 @@ actor ToolUseLoop {
                 // nonisolated(unsafe) is safe here -- conversationMessages contains only
                 // JSON-safe value types which are effectively value semantics.
                 nonisolated(unsafe) let messagesCopy = conversationMessages
-                let response = try await router.call(
+                let stream = router.stream(
                     messages: messagesCopy,
                     system: system,
                     tools: availableTools,
@@ -66,15 +73,54 @@ actor ToolUseLoop {
                     apiKey: apiKey
                 )
 
-                if !response.text.isEmpty {
-                    fullText += response.text
-                    onEvent(.textDelta(response.text))
+                var roundText = ""
+                var pendingTools: [String: PendingToolCall] = [:]
+                var completedToolCalls: [ToolCall] = []
+                var stopReason: StopReason = .endTurn
+
+                for try await event in stream {
+                    switch event {
+                    case .textDelta(let delta):
+                        roundText += delta
+                        fullText += delta
+                        onEvent(.textDelta(delta))
+
+                    case .toolCallStart(let id, let name):
+                        pendingTools[id] = PendingToolCall(id: id, name: name)
+
+                    case .toolCallDelta(let id, let delta):
+                        pendingTools[id]?.inputJSON += delta
+
+                    case .toolCallComplete(let id):
+                        guard let pending = pendingTools[id] else { continue }
+                        let inputDict: [String: JSONValue]
+                        if let data = pending.inputJSON.data(using: .utf8),
+                           let parsed = try? JSONDecoder().decode([String: JSONValue].self, from: data) {
+                            inputDict = parsed
+                        } else {
+                            inputDict = [:]
+                        }
+                        completedToolCalls.append(ToolCall(id: pending.id, name: pending.name, input: inputDict))
+
+                    case .messageComplete(let reason):
+                        stopReason = reason
+
+                    case .error(let msg):
+                        throw AIError.apiError(statusCode: 0, message: msg)
+                    }
                 }
 
-                guard response.stopReason == .toolUse, !response.toolCalls.isEmpty else {
+                guard stopReason == .toolUse, !completedToolCalls.isEmpty else {
                     onEvent(.finished(fullText: fullText))
                     return
                 }
+
+                let response = AIResponse(
+                    text: roundText,
+                    toolCalls: completedToolCalls,
+                    stopReason: stopReason,
+                    usage: nil
+                )
 
                 switch provider {
                 case .anthropic:
