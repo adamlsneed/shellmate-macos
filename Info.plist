@@ -19,9 +19,9 @@
     <key>SUFeedURL</key>
     <string>https://github.com/adamlsneed/shellmate-macos/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string></string>
+    <string>g6S3qtLmcbDQKMZPGagQVTSnoUPMXTCCBv2qj4tN8l4=</string>
     <key>SUEnableAutomaticChecks</key>
-    <false/>
+    <true/>
     <key>SUScheduledCheckInterval</key>
     <integer>86400</integer>
     <key>SUAllowsAutomaticUpdates</key>
