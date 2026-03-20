@@ -5,6 +5,8 @@ import os
 // all app lifecycle events (dock click, reopen, termination with cleanup)
 
 /// Handles macOS app lifecycle events: activation, dock click, termination.
+/// @unchecked Sendable: NSApplicationDelegate methods are always called on the main thread by AppKit.
+/// This class has no mutable state, so Sendable conformance is safe.
 final class AppLifecycleManager: NSObject, NSApplicationDelegate, @unchecked Sendable {
     private static let logger = Logger(subsystem: "com.shellmate.app", category: "lifecycle")
 

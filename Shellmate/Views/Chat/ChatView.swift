@@ -93,7 +93,7 @@ struct ChatView: View {
         let loop = ToolUseLoop(executor: executor)
         sendTask = Task {
             await registry.register(ShellProvider(shellService: shellService))
-            await registry.register(FilesProvider())
+            await registry.register(FilesProvider(shellService: shellService))
             await registry.register(WebProvider())
             await registry.register(SystemProvider(shellService: shellService))
             await registry.register(ClipboardProvider())

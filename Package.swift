@@ -7,8 +7,10 @@ let package = Package(
         .macOS(.v14)
     ],
     dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
-        .package(url: "https://github.com/scinfu/SwiftSoup", from: "2.7.0"),
+        // Sparkle: macOS auto-update framework — pinned for security (signature verification)
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.0"),
+        // SwiftSoup: HTML→text extraction for web_fetch tool
+        .package(url: "https://github.com/scinfu/SwiftSoup", exact: "2.13.2"),
     ],
     targets: [
         .executableTarget(

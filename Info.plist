@@ -21,10 +21,10 @@
     <key>SUPublicEDKey</key>
     <string></string>
     <key>SUEnableAutomaticChecks</key>
-    <true/>
+    <false/>
     <key>SUScheduledCheckInterval</key>
     <integer>86400</integer>
     <key>SUAllowsAutomaticUpdates</key>
-    <true/>
+    <false/>
 </dict>
 </plist>

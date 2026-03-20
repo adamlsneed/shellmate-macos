@@ -97,6 +97,16 @@ enum KeychainHelper {
         return delete(service: apiKeyService, account: provider.rawValue)
     }
 
+    /// Delete all stored API keys and tokens for all providers.
+    /// Call on app reset or uninstall cleanup.
+    static func deleteAllKeys() {
+        logger.info("Deleting all stored keys and tokens")
+        for provider in AIProvider.allCases {
+            deleteApiKey(for: provider)
+            deleteOAuthToken(for: provider)
+        }
+    }
+
     // MARK: - OAuth Token Convenience
 
     static let oauthTokenService = "com.shellmate.oauth"
