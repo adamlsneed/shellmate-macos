@@ -99,6 +99,9 @@ struct ChatView: View {
             await registry.register(ClipboardProvider())
             await registry.register(DisplayProvider(shellService: shellService))
             await registry.register(AudioProvider(shellService: shellService))
+            await registry.register(CalendarProvider())
+            await registry.register(RemindersProvider())
+            await registry.register(ContactsProvider())
             await loop.run(messages: msgs, system: sp, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
         }
     }
