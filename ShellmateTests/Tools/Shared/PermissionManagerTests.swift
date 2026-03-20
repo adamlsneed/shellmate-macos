@@ -7,10 +7,14 @@ import Testing
 private struct PermStub: AgentTool {
     let identifier = "perm_stub"
     let toolDescription = ""
-    let category = ToolCategory.system
+    let category: ToolCategory
     let actionTier = ActionTier.read
     let parameterSchema = ToolInputSchema(type: "object", properties: [:], required: [])
     func execute(parameters: [String: Any]) async throws -> AgentToolResult { .success("ok") }
+
+    init(category: ToolCategory = .system) {
+        self.category = category
+    }
 }
 
 // MARK: - Tests
@@ -43,10 +47,17 @@ struct PermissionManagerTests {
         #expect(all[.calendars] == .notRequested)
     }
 
-    @Test("checkPermissions returns nil in Phase 1")
-    func checkPermissionsReturnsNil() async {
+    @Test("checkPermissions returns nil for non-permission categories")
+    func checkPermissionsNonPermCategory() async {
         let manager = PermissionManager()
-        let result = await manager.checkPermissions(for: PermStub())
+        let result = await manager.checkPermissions(for: PermStub(category: .system))
+        #expect(result == nil)
+    }
+
+    @Test("checkPermissions returns nil for shell category")
+    func checkPermissionsShellCategory() async {
+        let manager = PermissionManager()
+        let result = await manager.checkPermissions(for: PermStub(category: .shell))
         #expect(result == nil)
     }
 
@@ -57,5 +68,35 @@ struct PermissionManagerTests {
         await manager.updateStatus(.accessibility, to: .restricted)
         let status = await manager.status(for: .accessibility)
         #expect(status == .restricted)
+    }
+
+    @Test("queryRealStatus returns a valid status for calendars")
+    func queryRealStatusCalendars() async {
+        let manager = PermissionManager()
+        let status = await manager.queryRealStatus(for: .calendars)
+        // In CI/test environments this will be either .notRequested or .denied
+        #expect([.notRequested, .granted, .denied, .restricted].contains(status))
+    }
+
+    @Test("queryRealStatus returns a valid status for reminders")
+    func queryRealStatusReminders() async {
+        let manager = PermissionManager()
+        let status = await manager.queryRealStatus(for: .reminders)
+        #expect([.notRequested, .granted, .denied, .restricted].contains(status))
+    }
+
+    @Test("queryRealStatus returns a valid status for contacts")
+    func queryRealStatusContacts() async {
+        let manager = PermissionManager()
+        let status = await manager.queryRealStatus(for: .contacts)
+        #expect([.notRequested, .granted, .denied, .restricted].contains(status))
+    }
+
+    @Test("queryRealStatus falls back to cache for non-OS permissions")
+    func queryRealStatusFallback() async {
+        let manager = PermissionManager()
+        await manager.updateStatus(.microphone, to: .granted)
+        let status = await manager.queryRealStatus(for: .microphone)
+        #expect(status == .granted)
     }
 }

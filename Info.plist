@@ -26,5 +26,11 @@
     <integer>86400</integer>
     <key>SUAllowsAutomaticUpdates</key>
     <false/>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Shellmate needs calendar access to create events, check your schedule, and manage appointments on your behalf.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Shellmate needs reminders access to create, complete, and manage your reminders.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Shellmate needs contacts access to look up contact information and add new contacts on your behalf.</string>
 </dict>
 </plist>
