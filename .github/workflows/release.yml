@@ -10,7 +10,6 @@ permissions:
 
 env:
   APP_NAME: Shellmate
-  SCHEME: Shellmate
   BUNDLE_ID: com.shellmate.app
 
 jobs:
@@ -30,7 +29,6 @@ jobs:
           CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
           CERTIFICATE_P12_PASSWORD: ${{ secrets.CERTIFICATE_P12_PASSWORD }}
         run: |
-          # Create a temporary keychain for the build
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
 
@@ -38,7 +36,6 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Decode and import the .p12 certificate
           echo "$CERTIFICATE_P12_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
           security import $RUNNER_TEMP/certificate.p12 \
             -k "$KEYCHAIN_PATH" \
@@ -46,81 +43,110 @@ jobs:
             -T /usr/bin/codesign \
             -T /usr/bin/security
 
-          # Allow codesign to access the keychain without UI prompt
           security set-key-partition-list -S apple-tool:,apple: \
             -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Add temporary keychain to the search list (before login keychain)
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
-
-          # Cleanup the .p12 file
           rm -f $RUNNER_TEMP/certificate.p12
 
-      - name: Resolve SPM dependencies
-        run: swift package resolve
+      - name: Build release binary
+        run: swift build -c release
 
-      - name: Build release archive
+      - name: Assemble .app bundle
         run: |
-          xcodebuild archive \
-            -scheme "$SCHEME" \
-            -archivePath "build/$APP_NAME.xcarchive" \
-            -configuration Release \
-            -destination 'generic/platform=macOS' \
-            CODE_SIGN_IDENTITY="${{ secrets.DEVELOPER_ID_APPLICATION }}" \
-            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
-            CODE_SIGN_STYLE=Manual \
-            OTHER_CODE_SIGN_FLAGS="--options=runtime" \
-            MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
-            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
-            | xcpretty
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          BUILD="${GITHUB_RUN_NUMBER}"
+          APP_DIR="build/$APP_NAME.app/Contents"
 
-      - name: Export app from archive
-        run: |
-          cat > ExportOptions.plist << 'PLIST'
+          # Create bundle structure
+          mkdir -p "$APP_DIR/MacOS"
+          mkdir -p "$APP_DIR/Resources"
+
+          # Copy binary
+          cp .build/release/Shellmate "$APP_DIR/MacOS/Shellmate"
+
+          # Copy resources (processed by SPM into the bundle)
+          if [ -d ".build/release/Shellmate_Shellmate.bundle" ]; then
+            cp -R .build/release/Shellmate_Shellmate.bundle "$APP_DIR/Resources/"
+          fi
+
+          # Generate Info.plist with version from tag
+          cat > "$APP_DIR/Info.plist" << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>method</key>
-              <string>developer-id</string>
-              <key>teamID</key>
-              <string>${{ secrets.APPLE_TEAM_ID }}</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>signingCertificate</key>
-              <string>${{ secrets.DEVELOPER_ID_APPLICATION }}</string>
+              <key>CFBundleName</key>
+              <string>$APP_NAME</string>
+              <key>CFBundleDisplayName</key>
+              <string>$APP_NAME</string>
+              <key>CFBundleIdentifier</key>
+              <string>$BUNDLE_ID</string>
+              <key>CFBundleVersion</key>
+              <string>$BUILD</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$VERSION</string>
+              <key>CFBundleExecutable</key>
+              <string>$APP_NAME</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleSignature</key>
+              <string>????</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>14.0</string>
+              <key>NSHumanReadableCopyright</key>
+              <string>Copyright © 2026 Adam Sneed. All rights reserved.</string>
+              <key>NSPrincipalClass</key>
+              <string>NSApplication</string>
+              <key>NSMainStoryboardFile</key>
+              <string></string>
+              <key>SUFeedURL</key>
+              <string>https://github.com/adamlsneed/shellmate-macos/releases/latest/download/appcast.xml</string>
+              <key>SUPublicEDKey</key>
+              <string>g6S3qtLmcbDQKMZPGagQVTSnoUPMXTCCBv2qj4tN8l4=</string>
+              <key>SUEnableAutomaticChecks</key>
+              <true/>
+              <key>SUScheduledCheckInterval</key>
+              <integer>86400</integer>
+              <key>SUAllowsAutomaticUpdates</key>
+              <false/>
+              <key>NSCalendarsFullAccessUsageDescription</key>
+              <string>Shellmate needs calendar access to create events, check your schedule, and manage appointments on your behalf.</string>
+              <key>NSRemindersFullAccessUsageDescription</key>
+              <string>Shellmate needs reminders access to create, complete, and manage your reminders.</string>
+              <key>NSContactsUsageDescription</key>
+              <string>Shellmate needs contacts access to look up contact information and add new contacts on your behalf.</string>
+              <key>NSAppleEventsUsageDescription</key>
+              <string>Shellmate needs automation access to interact with Notes, Mail, Music, and other apps on your behalf.</string>
+              <key>NSScreenCaptureUsageDescription</key>
+              <string>Shellmate needs screen capture access to take screenshots when you ask.</string>
+              <key>NSMicrophoneUsageDescription</key>
+              <string>Shellmate needs microphone access for voice dictation and speech recognition.</string>
           </dict>
           </plist>
           PLIST
 
-          xcodebuild -exportArchive \
-            -archivePath "build/$APP_NAME.xcarchive" \
-            -exportOptionsPlist ExportOptions.plist \
-            -exportPath "build/export" \
-            | xcpretty
+          # Copy entitlements for signing
+          cp Shellmate/Resources/Shellmate.entitlements build/Shellmate.entitlements
 
-      - name: Locate exported app
-        id: app
+          echo "App bundle assembled at build/$APP_NAME.app"
+          find "build/$APP_NAME.app" -type f | head -20
+
+      - name: Code sign app bundle
         run: |
-          # xcodebuild may export the .app to various locations depending on project type
-          APP_PATH=$(find build -name "$APP_NAME.app" -type d | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: $APP_NAME.app not found in build/"
-            find build -type d -maxdepth 4
-            exit 1
-          fi
-          echo "APP_PATH=$APP_PATH" >> "$GITHUB_OUTPUT"
-          echo "Found app at: $APP_PATH"
+          codesign --force --deep --sign "${{ secrets.DEVELOPER_ID_APPLICATION }}" \
+            --options runtime \
+            --entitlements build/Shellmate.entitlements \
+            "build/$APP_NAME.app"
+
+          # Verify signature
+          codesign --verify --deep --strict "build/$APP_NAME.app"
+          echo "Code signing verified successfully"
 
       - name: Create DMG
         run: |
           brew install create-dmg || true
 
-          # Simple DMG creation — skip Finder layout if AppleScript fails in CI
-          mkdir -p build/dmg-staging
-          cp -R "${{ steps.app.outputs.APP_PATH }}" build/dmg-staging/
-
-          # Try pretty DMG first, fall back to simple hdiutil if create-dmg fails
           create-dmg \
             --volname "$APP_NAME" \
             --window-pos 200 120 \
@@ -129,12 +155,12 @@ jobs:
             --app-drop-link 450 190 \
             --no-internet-enable \
             "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg" \
-            "build/dmg-staging/" \
+            "build/$APP_NAME.app" \
             || {
-              echo "create-dmg with layout failed, creating simple DMG..."
+              echo "create-dmg layout failed, creating simple DMG..."
               hdiutil create \
                 -volname "$APP_NAME" \
-                -srcfolder "build/dmg-staging" \
+                -srcfolder "build/$APP_NAME.app" \
                 -ov -format UDZO \
                 "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg"
             }
