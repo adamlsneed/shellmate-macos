@@ -21,6 +21,7 @@ enum ToolCategory: String, CaseIterable, Sendable, Codable {
     case automation
     case media
     case tts
+    case windows
 
     var displayName: String {
         switch self {
@@ -43,6 +44,7 @@ enum ToolCategory: String, CaseIterable, Sendable, Codable {
         case .automation:   "Automation"
         case .media:        "Media"
         case .tts:          "Text to Speech"
+        case .windows:      "Window Management"
         }
     }
 }
