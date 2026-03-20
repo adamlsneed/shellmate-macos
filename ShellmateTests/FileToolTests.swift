@@ -135,6 +135,6 @@ import Testing; import Foundation; @testable import Shellmate
         #expect(ids.contains("file_read"))
         #expect(ids.contains("file_write"))
         #expect(ids.contains("file_list"))
-        #expect(ids.count == 3)
+        #expect(ids.count == 12)
     }
 }
