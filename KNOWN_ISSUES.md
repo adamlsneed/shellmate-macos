@@ -4,15 +4,17 @@ Tracked issues, TODOs, and technical debt.
 
 ## Open
 
-- [ ] App icon assets not yet created (circuit-board turtle) — placeholder AppIcon in asset catalog
-- [ ] Streaming chat display not wired — streaming parsers are implemented and tested but ChatView uses non-streaming ToolUseLoop. Users see blank screen then full response.
-- [ ] ConfirmationService auto-approves everything — ConfirmationUIHandler placeholder always returns true. ConfirmationCardView exists but is not rendered in ChatView.
-- [ ] CapabilitiesConfig `enabledCategories` and `autoApproveCategories` not persisted — settings toggles are local state only, not saved to shellmate.json.
+- [ ] ConfigFileWatcher uses GCD DispatchSource — acceptable since the API requires it
+- [ ] `AnthropicClient` and `OpenAIClient` base URLs use force-unwrapped `URL(string:)!` — acceptable for compile-time-constant URLs
 - [ ] ConfigFileWatcher uses GCD DispatchSource (NWPathMonitor also requires a DispatchQueue) — acceptable since the APIs require it
 - [ ] `AnthropicClient` and `OpenAIClient` base URLs use force-unwrapped `URL(string:)!` — acceptable for compile-time-constant URLs
 
 ## Implemented
 
+- [x] App icon — terminal turtle with shell prompt (1024px, all 10 sizes)
+- [x] Streaming chat display — ToolUseLoop uses router.stream() for real-time text
+- [x] Confirmation UI — ConfirmationCardView renders inline with Approve/Deny
+- [x] Capability settings persist to shellmate.json via ConfigService
 - [x] Sparkle EdDSA public key generated and set in Info.plist (C-001 resolved)
 - [x] CI/CD pipeline — GitHub Actions: build, sign, notarize, DMG, appcast, release
 - [x] Full agent capabilities: 120+ tools across 19 providers (Phases 1-6)
@@ -43,4 +45,4 @@ Tracked issues, TODOs, and technical debt.
 
 - [x] ~~ConfigService duplicate properties~~ — resolved
 - [x] ~~Date formatting duplication~~ — resolved
-- [ ] TEST_COVERAGE.md total count is stale (says 103, actual is 605)
+- [x] ~~TEST_COVERAGE.md stale~~ — updated to 605 tests

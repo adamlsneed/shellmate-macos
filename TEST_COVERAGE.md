@@ -2,76 +2,48 @@
 
 ## Summary
 
-**Total tests:** 165
-**Total suites:** 32
+**Total tests:** 605
+**Total suites:** 195
 **Framework:** Swift Testing (`import Testing`, `@Test`, `#expect`, `@Suite`)
 **All tests pass:** Yes (`swift test` exits 0)
 
-## Tests Per Module
+## Tests by Category
 
-| Module | Suite | Tests | File |
-|--------|-------|-------|------|
-| **Models** | ChatMessage | 6 | `ChatMessageTests.swift` |
-| | JSONValue | 12 | `JSONValueTests.swift` |
-| | AgentSpec | 3 | `AgentSpecTests.swift` |
-| | ShellmateConfig | 4 | `ShellmateConfigTests.swift` |
-| | ToolDefinition | 5 | `ToolDefinitionTests.swift` |
-| **Services** | GeneratorService | 16 | `GeneratorServiceTests.swift` |
-| | ConfigService | 2 | `ConfigServiceTests.swift` |
-| | MigrationService | 3 | `MigrationServiceTests.swift` |
-| | WorkspaceService | 3 | `WorkspaceServiceTests.swift` |
-| | ValidationService | 4 | `ValidationServiceTests.swift` |
-| **AI Clients** | AIRouter | 5 | `AIRouterTests.swift` |
-| **Tools** | SecurityPolicy | 5 | `SecurityPolicyTests.swift` |
-| | SecurityPolicy (extended) | 7 | `SecurityPolicyExtendedTests.swift` |
-| | ShellTool | 6 | `ShellToolTests.swift` |
-| | FileReadTool | 5 | `FileToolTests.swift` |
-| | FileWriteTool | 4 | `FileToolTests.swift` |
-| | FileListTool | 5 | `FileToolTests.swift` |
-| | WebSearchTool | 2 | `WebToolTests.swift` |
-| | WebFetchTool | 4 | `WebToolTests.swift` |
-| | ToolExecutor | 3 | `ToolExecutorTests.swift` |
-| **Test Infra** | TestFixtures | — | `TestFixtures.swift` |
+| Category | Suites | Approx Tests | Files |
+|---|---|---|---|
+| **Core Architecture** | 6 | ~30 | AgentToolTests, ToolRegistryTests, CategoryResolverTests |
+| **Shell & Files** | 8 | ~60 | ShellServiceTests, ShellEnhancedToolTests, FileToolTests, FilesEnhancedToolTests |
+| **Web** | 2 | ~15 | WebToolTests |
+| **System & Clipboard** | 4 | ~25 | SystemToolTests, ClipboardToolTests |
+| **Display & Audio** | 4 | ~30 | DisplayToolTests, AudioToolTests |
+| **Calendar & Reminders** | 4 | ~50 | CalendarToolTests, RemindersToolTests |
+| **Contacts** | 2 | ~20 | ContactsToolTests |
+| **Apps & Process** | 4 | ~30 | AppsToolTests, ProcessToolTests |
+| **Developer** | 2 | ~35 | DeveloperToolTests |
+| **Network** | 2 | ~20 | NetworkToolTests |
+| **Notes & Email** | 4 | ~30 | NotesToolTests, EmailToolTests |
+| **Automation** | 2 | ~25 | AutomationToolTests |
+| **Media** | 2 | ~30 | MediaToolTests |
+| **TTS & Windows** | 4 | ~30 | TTSToolTests, WindowToolTests |
+| **Shared Services** | 8 | ~40 | ConfirmationServiceTests, PermissionManagerTests, NaturalDateParserTests, AppleScriptServiceTests |
+| **Security** | 4 | ~25 | SecurityPolicyTests, SecurityPolicyExtendedTests, SecurityAuditTests |
+| **Models & Services** | 12 | ~60 | ChatMessageTests, JSONValueTests, ConfigServiceTests, etc. |
+| **AI Clients** | 6 | ~30 | AnthropicClientTests, OpenAIClientTests, AIRouterTests, StreamingParserTests |
 
-## Key Tested Paths
+## What's Tested
 
-### Models
-- All Codable round-trips (encode -> decode -> verify equality)
-- JSONValue: all 7 type cases, nested structures, accessors, anyValue interop
-- AgentSpec: snake_case CodingKeys mapping
-- ShellmateConfig: nested structure, ToolPermissions, CapabilitiesConfig
-- ToolDefinition: schemas, provider format conversion (Anthropic + OpenAI), deny filtering
+- **Every tool:** Conformance (identifier, category, tier, schema), parameter validation, confirmationDescription
+- **Security:** Path blocklist, URL blocklist, shell command blocklist, SSRF protection, symlink bypass prevention
+- **Core services:** ToolRegistry routing, CategoryResolver keyword matching, ConfirmationService tier logic, PermissionManager state
+- **NaturalDateParser:** Relative dates, colloquial times, durations, ISO 8601, failure cases
+- **Shell execution:** Output capping, timeout with SIGKILL, blocked commands, history tracking
+- **File tools:** CRUD, Trash-only delete, compression, SecurityPolicy integration
+- **Process tools:** Protected process blocklist rejection
 
-### Services
-- GeneratorService: all 8 generators produce non-empty content, contain expected agent data, handle empty specs with fallbacks
-- ConfigService: config round-trip encoding
-- ValidationService: all check types return valid structures
-- MigrationService: needs-migration detection logic, copy-and-rename behavior
-- WorkspaceService: path resolution, file existence checks
+## What's Not Tested
 
-### Tools
-- SecurityPolicy: 12 tests covering path blocklist (home-relative + absolute), URL blocklist (private IPs, localhost, non-HTTP schemes, malformed), dot-dot path resolution
-- ShellTool: echo, pwd, exit codes, stderr capture, empty output, timeout termination
-- FileReadTool: read success, nonexistent, missing params, blocked path, oversized file
-- FileWriteTool: write success, parent directory creation, missing params, blocked path
-- FileListTool: directory listing, empty dir, blocked path, depth limiting, directory trailing slash
-- WebSearchTool: missing query, missing API key
-- WebFetchTool: missing URL, localhost blocking, private IP blocking, scheme blocking
-- ToolExecutor: routing to correct tool, unknown tool error
-
-### AI Clients
-- Provider detection, model normalization, OAuth token detection
-- Tool deny category mapping and filtering
-
-## Known Test Gaps (TODOs)
-
-- **ConfigService isolated tests:** ConfigService init does not accept a custom directory, so read/write/backup cannot be tested in isolation without touching `~/.shellmate/`. TODO: Add `configDir:` parameter to ConfigService init.
-- **AnthropicClient/OpenAIClient request building:** Not tested (would require mocking URLSession or extracting request-building into testable functions). TODO: Extract `buildRequest` as internal and test headers/body structure.
-- **AnthropicClient/OpenAIClient response parsing:** Not tested end-to-end. TODO: Extract `parseResponse` as internal and test with sample JSON payloads.
-- **Streaming (SSE) parsing:** Not tested. TODO: Test line-by-line SSE parsing with mock data.
-- **ToolUseLoop:** Not tested (requires mocking AI responses and tool execution). TODO: Create mock AIRouter and ToolExecutor for integration testing.
-- **AIConfigState.resolveApiKey:** Not tested (depends on Keychain and environment). TODO: Test with mock KeychainHelper.
-- **ChatState, WizardState, AppState:** Observable state classes not tested (UI-coupled). TODO: Test state transitions and phase navigation.
-- **View layer:** No view tests. Would require ViewInspector or similar. Low priority for now.
-- **WebFetchTool HTML extraction:** Not tested with real HTML content. TODO: Test `extractText` with sample HTML documents.
-- **Shell command output truncation:** Not tested (would need a command that produces >100K chars). TODO: Test with `yes | head -c 200000` or similar.
+- **Real EventKit/Contacts operations:** Require macOS permission grants not available in CI
+- **Real AppleScript execution:** Requires running apps (Notes, Mail, Music)
+- **Window management:** Requires Accessibility permission
+- **View layer:** No SwiftUI view tests
+- **End-to-end pipeline:** No test that sends a full message through ChatView → ToolUseLoop → tool → response
