@@ -49,9 +49,21 @@ struct SimpleAISetup: View {
         HStack(alignment: .top, spacing: 12) { Text("\(n)").font(.callout.bold()).foregroundStyle(.white).frame(width: 32, height: 32).background(ShellmateColors.accent).clipShape(Circle()); Text(t).font(.callout).foregroundStyle(ShellmateColors.textSecondary).fixedSize(horizontal: false, vertical: true) }
     }
     private func connect() {
-        let k = accessCode.trimmingCharacters(in: .whitespacesAndNewlines); guard !k.isEmpty else { return }
-        isTesting = true; error = nil; let p: AIProvider = k.hasPrefix("sk-ant-") ? .anthropic : .openai
-        KeychainHelper.save(service: "com.shellmate.api", account: p.rawValue, value: k)
-        aiConfig.provider = p; aiConfig.model = p.defaultModel; aiConfig.isConfigured = true; isTesting = false; onDone()
+        let k = accessCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !k.isEmpty else { return }
+        isTesting = true
+        error = nil
+        let p: AIProvider = k.hasPrefix("sk-ant-") ? .anthropic : .openai
+        aiConfig.provider = p
+        aiConfig.model = p.defaultModel
+        Task {
+            await aiConfig.saveAndValidateKey(k)
+            isTesting = false
+            if aiConfig.isConfigured {
+                onDone()
+            } else {
+                error = aiConfig.keyValidationError ?? "API key validation failed"
+            }
+        }
     }
 }

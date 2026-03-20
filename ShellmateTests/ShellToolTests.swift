@@ -1,9 +1,34 @@
 import Testing; import Foundation; @testable import Shellmate
-@Suite("ShellTool") struct ShellToolTests {
-    @Test("echo") func e() async { let r=await ShellTool.execute(input:["command":"echo hello"]); #expect(!r.isError); #expect(r.content.contains("hello")) }
-    @Test("pwd") func p() async { #expect(!(await ShellTool.execute(input:["command":"pwd"])).isError) }
-    @Test("missing") func m() async { #expect((await ShellTool.execute(input:[:])).isError) }
-    @Test("exit code") func ec() async { let r=await ShellTool.execute(input:["command":"exit 42"]); #expect(r.isError); #expect(r.content.contains("42")) }
-    @Test("empty output") func eo() async { #expect((await ShellTool.execute(input:["command":"true"])).content=="(no output)") }
-    @Test("timeout") func to() async { let r=await ShellTool.execute(input:["command":"sleep 30","timeout":1.0]); #expect(r.isError); #expect(r.content.contains("timed out")) }
+
+/// Tests for ShellExecuteTool via the AgentTool instance API.
+/// The old ShellTool compat enum has been removed; ShellServiceTests covers the service layer.
+@Suite("ShellExecuteTool") struct ShellToolTests {
+    private func makeTool() -> ShellExecuteTool {
+        ShellExecuteTool(service: ShellService())
+    }
+
+    @Test("echo") func echo() async throws {
+        let r = try await makeTool().execute(parameters: ["command": "echo hello"])
+        #expect(!r.isError); #expect(r.content.contains("hello"))
+    }
+
+    @Test("pwd") func pwd() async throws {
+        let r = try await makeTool().execute(parameters: ["command": "pwd"])
+        #expect(!r.isError)
+    }
+
+    @Test("missing command") func missing() async throws {
+        let r = try await makeTool().execute(parameters: [:])
+        #expect(r.isError)
+    }
+
+    @Test("exit code") func exitCode() async throws {
+        let r = try await makeTool().execute(parameters: ["command": "exit 42"])
+        #expect(r.isError); #expect(r.content.contains("42"))
+    }
+
+    @Test("empty output") func emptyOutput() async throws {
+        let r = try await makeTool().execute(parameters: ["command": "true"])
+        #expect(r.content == "(no output)")
+    }
 }

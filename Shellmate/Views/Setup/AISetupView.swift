@@ -28,10 +28,20 @@ struct AISetupView: View {
         .task { if let k = aiConfig.resolveApiKey(), !k.isEmpty { aiConfig.isConfigured = true; onDone() } }
     }
     private func handleConnect() {
-        let k = apiKey.trimmingCharacters(in: .whitespacesAndNewlines); guard !k.isEmpty else { return }
-        isTesting = true; error = nil
-        KeychainHelper.save(service: "com.shellmate.api", account: selectedProvider.rawValue, value: k)
-        aiConfig.provider = selectedProvider; aiConfig.model = selectedProvider.defaultModel; aiConfig.isConfigured = true
-        isTesting = false; onDone()
+        let k = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !k.isEmpty else { return }
+        isTesting = true
+        error = nil
+        aiConfig.provider = selectedProvider
+        aiConfig.model = selectedProvider.defaultModel
+        Task {
+            await aiConfig.saveAndValidateKey(k)
+            isTesting = false
+            if aiConfig.isConfigured {
+                onDone()
+            } else {
+                error = aiConfig.keyValidationError ?? "API key validation failed"
+            }
+        }
     }
 }

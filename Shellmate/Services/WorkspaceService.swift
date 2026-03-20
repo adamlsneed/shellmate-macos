@@ -44,6 +44,9 @@ struct WorkspaceService: Sendable {
             try backupWorkspaceFile(fileURL)
         }
         try content.write(to: fileURL, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o600], ofItemAtPath: fileURL.path
+        )
     }
 
     func writeFiles(_ files: [GeneratedFile], force: Bool = false) -> WorkspaceWriteResult {
@@ -93,10 +96,9 @@ struct WorkspaceService: Sendable {
     }
 
     private func backupWorkspaceFile(_ fileURL: URL) throws {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
         let ext = fileURL.pathExtension
-        let backupURL = fileURL.deletingPathExtension().appendingPathExtension("\(ext).bak-\(formatter.string(from: Date()))")
+        let backupURL = fileURL.deletingPathExtension()
+            .appendingPathExtension("\(ext).bak-\(BackupTimestamp.now)")
         try? FileManager.default.removeItem(at: backupURL)
         try FileManager.default.copyItem(at: fileURL, to: backupURL)
     }

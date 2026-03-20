@@ -17,6 +17,7 @@ struct WizardProgress: Codable, Sendable {
 final class WizardState {
     private static let logger = Logger(subsystem: "com.shellmate.app", category: "wizard")
     private static let progressFile = "wizard-progress.json"
+
     var phase: WizardPhase = .chat
     var agentSpec = AgentSpec()
     var conversationMessages: [ChatMessage] = []
@@ -24,48 +25,111 @@ final class WizardState {
     var generatedFiles: [GeneratedFile] = []
     var isSimpleMode: Bool = false
     var isProcessing: Bool = false
-    private let configService: ConfigService
-    init(configService: ConfigService = ConfigService()) { self.configService = configService }
 
-    func nextPhase() { guard let n = WizardPhase(rawValue: phase.rawValue + 1) else { return }; phase = n; persistProgress() }
-    func previousPhase() { guard let p = WizardPhase(rawValue: phase.rawValue - 1) else { return }; phase = p; persistProgress() }
+    private let configService: ConfigService
+
+    init(configService: ConfigService = ConfigService()) {
+        self.configService = configService
+    }
+
+    func nextPhase() {
+        guard let next = WizardPhase(rawValue: phase.rawValue + 1) else { return }
+        phase = next
+        persistProgress()
+    }
+
+    func previousPhase() {
+        guard let prev = WizardPhase(rawValue: phase.rawValue - 1) else { return }
+        phase = prev
+        persistProgress()
+    }
 
     func reset() {
-        phase = .chat; agentSpec = AgentSpec(); conversationMessages = []; conversationComplete = false
-        generatedFiles = []; isSimpleMode = false; isProcessing = false; clearProgress()
+        phase = .chat
+        agentSpec = AgentSpec()
+        conversationMessages = []
+        conversationComplete = false
+        generatedFiles = []
+        isSimpleMode = false
+        isProcessing = false
+        clearProgress()
     }
 
     func populateSimpleDefaults() {
-        if agentSpec.personality.isEmpty { agentSpec.personality = "Warm, patient, and encouraging. Explains things simply." }
-        if agentSpec.mission.isEmpty { agentSpec.mission = "Help with everyday Mac tasks." }
-        if agentSpec.failure.isEmpty { agentSpec.failure = "Apologize simply and suggest trying a different approach." }
-        if agentSpec.escalation.isEmpty { agentSpec.escalation = "If something seems risky, always ask before doing it." }
-        if agentSpec.never.isEmpty { agentSpec.never = ["Never delete files without asking first", "Never change system settings without asking first", "Never share personal information"] }
+        if agentSpec.personality.isEmpty {
+            agentSpec.personality = "Warm, patient, and encouraging. Explains things simply."
+        }
+        if agentSpec.mission.isEmpty {
+            agentSpec.mission = "Help with everyday Mac tasks."
+        }
+        if agentSpec.failure.isEmpty {
+            agentSpec.failure = "Apologize simply and suggest trying a different approach."
+        }
+        if agentSpec.escalation.isEmpty {
+            agentSpec.escalation = "If something seems risky, always ask before doing it."
+        }
+        if agentSpec.never.isEmpty {
+            agentSpec.never = [
+                "Never delete files without asking first",
+                "Never change system settings without asking first",
+                "Never share personal information",
+            ]
+        }
         persistProgress()
     }
 
     func persistProgress() {
-        let progress = WizardProgress(phase: phase, agentSpec: agentSpec, isSimpleMode: isSimpleMode, conversationComplete: conversationComplete)
+        let progress = WizardProgress(
+            phase: phase,
+            agentSpec: agentSpec,
+            isSimpleMode: isSimpleMode,
+            conversationComplete: conversationComplete
+        )
         do {
             try configService.ensureConfigDirectory()
-            let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted]
-            try encoder.encode(progress).write(to: configService.configDirectory.appendingPathComponent(Self.progressFile), options: .atomic)
-        } catch { Self.logger.warning("Failed to persist wizard progress: \(error.localizedDescription)") }
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted]
+            let data = try encoder.encode(progress)
+            let url = configService.configDirectory.appendingPathComponent(Self.progressFile)
+            try data.write(to: url, options: .atomic)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o600], ofItemAtPath: url.path
+            )
+        } catch {
+            Self.logger.warning("Failed to persist wizard progress: \(error.localizedDescription)")
+        }
     }
 
-    @discardableResult func restoreProgress() -> Bool {
+    @discardableResult
+    func restoreProgress() -> Bool {
         let url = configService.configDirectory.appendingPathComponent(Self.progressFile)
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
         do {
             let progress = try JSONDecoder().decode(WizardProgress.self, from: Data(contentsOf: url))
-            phase = progress.phase; agentSpec = progress.agentSpec; isSimpleMode = progress.isSimpleMode; conversationComplete = progress.conversationComplete
+            phase = progress.phase
+            agentSpec = progress.agentSpec
+            isSimpleMode = progress.isSimpleMode
+            conversationComplete = progress.conversationComplete
             return true
-        } catch { return false }
+        } catch {
+            Self.logger.warning("Failed to restore wizard progress: \(error.localizedDescription)")
+            return false
+        }
     }
 
-    func clearProgress() { try? FileManager.default.removeItem(at: configService.configDirectory.appendingPathComponent(Self.progressFile)) }
+    func clearProgress() {
+        let url = configService.configDirectory.appendingPathComponent(Self.progressFile)
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            Self.logger.info("No wizard progress to clear: \(error.localizedDescription)")
+        }
+    }
 }
 
 struct GeneratedFile: Identifiable, Sendable {
-    let id: String; let filename: String; let content: String; var existsOnDisk: Bool = false
+    let id: String
+    let filename: String
+    let content: String
+    var existsOnDisk: Bool = false
 }

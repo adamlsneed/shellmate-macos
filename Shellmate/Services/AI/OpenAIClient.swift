@@ -33,7 +33,7 @@ enum OpenAIClient {
                 throw AIError.invalidResponse
             }
             if retryableStatusCodes.contains(httpResponse.statusCode) {
-                let body = String(data: data, encoding: .utf8) ?? "unknown error"
+                let body = String(String(data: data, encoding: .utf8)?.prefix(500) ?? "unknown error")
                 let retryAfter = parseRetryAfter(httpResponse)
                 throw RetryableError(
                     underlying: AIError.apiError(statusCode: httpResponse.statusCode, message: body),
@@ -41,7 +41,7 @@ enum OpenAIClient {
                 )
             }
             guard httpResponse.statusCode == 200 else {
-                let body = String(data: data, encoding: .utf8) ?? "unknown error"
+                let body = String(String(data: data, encoding: .utf8)?.prefix(500) ?? "unknown error")
                 throw AIError.apiError(statusCode: httpResponse.statusCode, message: body)
             }
             logRateLimitHeaders(httpResponse)
@@ -190,7 +190,7 @@ enum OpenAIClient {
             body["stream_options"] = ["include_usage": true]
         }
         if !tools.isEmpty {
-            body["tools"] = ToolDefinitions.toOpenAIFormat(tools)
+            body["tools"] = tools.toOpenAIFormat()
         }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

@@ -61,10 +61,9 @@ final class NetworkMonitor {
 
     /// Check connectivity and throw if offline.
     /// Call before making network requests to provide a clear error message.
-    nonisolated func requireConnectivity() throws {
-        // NWPathMonitor().currentPath gives the instantaneous snapshot
-        let path = NWPathMonitor().currentPath
-        if path.status != .satisfied {
+    /// Uses the monitor's cached state rather than creating a new NWPathMonitor each call.
+    func requireConnectivity() throws {
+        if !isConnected {
             throw AIError.networkUnavailable
         }
     }

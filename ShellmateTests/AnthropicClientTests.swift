@@ -68,7 +68,10 @@ struct AnthropicClientTests {
 
     @Test("builds request with tools")
     func testBuildRequestWithTools() throws {
-        let tools = [ToolDefinitions.shellExec, ToolDefinitions.fileRead]
+        let tools = [
+            ToolDefinition(name: "shell_exec", description: "Execute a shell command", inputSchema: ToolInputSchema(type: "object", properties: ["command": ToolProperty(type: "string", description: "The command")], required: ["command"])),
+            ToolDefinition(name: "file_read", description: "Read a file", inputSchema: ToolInputSchema(type: "object", properties: ["path": ToolProperty(type: "string", description: "Path")], required: ["path"])),
+        ]
         let request = try AnthropicClient.buildRequest(
             messages: [["role": "user", "content": "Hello"]],
             system: nil,

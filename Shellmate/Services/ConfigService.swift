@@ -1,6 +1,17 @@
 import Foundation
 import os
 
+/// Shared timestamp format for backup filenames.
+enum BackupTimestamp {
+    private static let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        return f
+    }()
+
+    static var now: String { formatter.string(from: Date()) }
+}
+
 enum ConfigError: LocalizedError {
     case notFound
     case readFailed(String)
@@ -32,8 +43,8 @@ final class ConfigService: Sendable {
         self.workspaceDir = dir.appendingPathComponent("workspace")
     }
 
+    // Aliases kept for compatibility — prefer configDir/configFile/workspaceDir directly
     var configDirectory: URL { configDir }
-    var configFilePath: URL { configFile }
     var workspacePath: URL { workspaceDir }
     var configExists: Bool { FileManager.default.fileExists(atPath: configFile.path) }
 
@@ -74,22 +85,37 @@ final class ConfigService: Sendable {
 
     func backupConfig() throws {
         guard FileManager.default.fileExists(atPath: configFile.path) else { return }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        let backupFile = configDir.appendingPathComponent("shellmate.json.bak-\(formatter.string(from: Date()))")
+        let backupFile = configDir.appendingPathComponent("shellmate.json.bak-\(BackupTimestamp.now)")
         try FileManager.default.copyItem(at: configFile, to: backupFile)
     }
 
     func restoreFromBackup() throws -> ShellmateConfig {
-        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: configDir.path) else {
-            throw ConfigError.backupRestoreFailed("Cannot list config directory")
+        let contents: [String]
+        do {
+            contents = try FileManager.default.contentsOfDirectory(atPath: configDir.path)
+        } catch {
+            throw ConfigError.backupRestoreFailed("Cannot list config directory: \(error.localizedDescription)")
         }
-        for backup in contents.filter({ $0.contains(".bak") }).sorted().reversed() {
-            if let data = try? Data(contentsOf: configDir.appendingPathComponent(backup)),
-               let config = try? JSONDecoder().decode(ShellmateConfig.self, from: data) {
-                let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-                if let d = try? enc.encode(config) { try? d.write(to: configFile, options: .atomic) }
+
+        let backups = contents.filter { $0.contains(".bak") }.sorted().reversed()
+        for backup in backups {
+            let backupURL = configDir.appendingPathComponent(backup)
+            do {
+                let data = try Data(contentsOf: backupURL)
+                let config = try JSONDecoder().decode(ShellmateConfig.self, from: data)
+                // Restore this backup as the active config
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let encoded = try encoder.encode(config)
+                try encoded.write(to: configFile, options: .atomic)
+                try? FileManager.default.setAttributes(
+                    [.posixPermissions: 0o600], ofItemAtPath: configFile.path
+                )
+                Self.logger.info("Restored config from backup: \(backup)")
                 return config
+            } catch {
+                Self.logger.warning("Backup \(backup) unusable: \(error.localizedDescription)")
+                continue
             }
         }
         throw ConfigError.backupRestoreFailed("No valid backup found")
@@ -109,24 +135,53 @@ final class ConfigService: Sendable {
     }
 }
 
+/// Watches the config file for changes using GCD DispatchSource.
+/// GCD is used here because DispatchSource.makeFileSystemObjectSource has no
+/// Swift Concurrency equivalent.
 @MainActor
 final class ConfigFileWatcher {
-    private static let logger = Logger(subsystem: "com.shellmate.app", category: "config")
+    private static let logger = Logger(subsystem: "com.shellmate.app", category: "config-watcher")
     private let configPath: String
     private var source: DispatchSourceFileSystemObject?
     private var fileDescriptor: Int32 = -1
     var onChange: (() -> Void)?
-    init(configPath: String) { self.configPath = configPath }
-    deinit { source?.cancel(); source = nil }
+
+    init(configPath: String) {
+        self.configPath = configPath
+    }
+
+    deinit {
+        source?.cancel()
+        source = nil
+    }
+
     func start() {
         stop()
         fileDescriptor = open(configPath, O_EVTONLY)
-        guard fileDescriptor >= 0 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fileDescriptor, eventMask: [.write, .rename, .delete], queue: .main)
-        source.setEventHandler { [weak self] in self?.onChange?() }
-        source.setCancelHandler { [weak self] in if let fd = self?.fileDescriptor, fd >= 0 { close(fd) }; self?.fileDescriptor = -1 }
+        guard fileDescriptor >= 0 else {
+            Self.logger.warning("Failed to open config file for watching: \(self.configPath)")
+            return
+        }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fileDescriptor,
+            eventMask: [.write, .rename, .delete],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            self?.onChange?()
+        }
+        source.setCancelHandler { [weak self] in
+            guard let self, self.fileDescriptor >= 0 else { return }
+            close(self.fileDescriptor)
+            self.fileDescriptor = -1
+        }
         source.resume()
         self.source = source
     }
-    func stop() { source?.cancel(); source = nil }
+
+    func stop() {
+        source?.cancel()
+        source = nil
+    }
 }

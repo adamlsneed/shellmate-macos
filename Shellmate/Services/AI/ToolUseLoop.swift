@@ -7,7 +7,12 @@ actor ToolUseLoop {
     private static let logger = Logger(subsystem: "com.shellmate.app", category: "tool-loop")
     private let maxRounds = 15
     private let router = AIRouter()
-    private let executor = ToolExecutor()
+    private let executor: ToolExecutor
+    private let categoryResolver = CategoryResolver()
+
+    init(executor: ToolExecutor) {
+        self.executor = executor
+    }
 
     /// Event emitted during the loop for UI updates.
     enum LoopEvent: Sendable {
@@ -24,14 +29,18 @@ actor ToolUseLoop {
     func run(
         messages: [SendableDict],
         system: String,
-        tools: [ToolDefinition],
         provider: AIProvider,
         model: String,
         apiKey: String,
         denyCategories: [ToolDenyCategory] = [],
         onEvent: @Sendable @escaping (LoopEvent) -> Void
     ) async {
-        let availableTools = ToolDefinitions.available(denyCategories: denyCategories)
+        let lastMessage = messages.last?.dict["content"] as? String ?? ""
+        let resolvedCategories = categoryResolver.resolve(
+            message: lastMessage,
+            enabledCategories: Set(await executor.registry.enabledCategories())
+        )
+        let availableTools = await executor.registry.toolSchemas(for: resolvedCategories, denyCategories: denyCategories)
         var conversationMessages: [[String: Any]] = messages.map(\.dict)
         var fullText = ""
 

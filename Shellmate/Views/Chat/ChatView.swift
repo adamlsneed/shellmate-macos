@@ -84,9 +84,35 @@ struct ChatView: View {
         let cs = ConfigService(); var deny: [ToolDenyCategory] = []
         if let cfg = try? cs.readConfig() { for cat in ToolDenyCategory.allCases { if cfg.capabilities.tools.deny.contains(cat.rawValue) { deny.append(cat) } } }
         let msgs: [SendableDict] = chatState.messages.map { SendableDict(["role": $0.role.rawValue, "content": $0.content]) }
-        let loop = ToolUseLoop()
+        let shellService = ShellService()
+        let appleScriptService = AppleScriptService(shellService: shellService)
+        let registry = ToolRegistry()
+        let uiHandler = ConfirmationUIHandler()
+        let confirmation = ConfirmationService(uiHandler: uiHandler)
+        let permissions = PermissionManager()
+        let executor = ToolExecutor(registry: registry, confirmationService: confirmation, permissionManager: permissions)
+        let loop = ToolUseLoop(executor: executor)
         sendTask = Task {
-            await loop.run(messages: msgs, system: sp, tools: ToolDefinitions.all, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
+            await registry.register(ShellProvider(shellService: shellService))
+            await registry.register(FilesProvider(shellService: shellService))
+            await registry.register(WebProvider(shellService: shellService))
+            await registry.register(SystemProvider(shellService: shellService))
+            await registry.register(ClipboardProvider())
+            await registry.register(DisplayProvider(shellService: shellService))
+            await registry.register(AudioProvider(shellService: shellService))
+            await registry.register(CalendarProvider())
+            await registry.register(RemindersProvider())
+            await registry.register(ContactsProvider())
+            await registry.register(AppsProvider(shellService: shellService))
+            await registry.register(DeveloperProvider(shellService: shellService))
+            await registry.register(NetworkProvider(shellService: shellService))
+            await registry.register(NotesProvider(appleScriptService: appleScriptService))
+            await registry.register(EmailProvider(shellService: shellService, appleScriptService: appleScriptService))
+            await registry.register(AutomationProvider(shellService: shellService))
+            await registry.register(MediaProvider(shellService: shellService, appleScriptService: appleScriptService))
+            await registry.register(TTSProvider(shellService: shellService))
+            await registry.register(WindowProvider())
+            await loop.run(messages: msgs, system: sp, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
         }
     }
 

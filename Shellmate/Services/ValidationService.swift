@@ -10,7 +10,11 @@ struct ValidationCheck: Identifiable, Sendable {
 
 /// Runs preflight and setup validation checks.
 struct ValidationService: Sendable {
-    private let configService = ConfigService()
+    private let configService: ConfigService
+
+    init(configService: ConfigService = ConfigService()) {
+        self.configService = configService
+    }
 
     /// Run all validation checks.
     func runAll(aiConfig: AIConfigState) async -> [ValidationCheck] {
