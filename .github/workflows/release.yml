@@ -99,21 +99,46 @@ jobs:
             -exportPath "build/export" \
             | xcpretty
 
+      - name: Locate exported app
+        id: app
+        run: |
+          # xcodebuild may export the .app to various locations depending on project type
+          APP_PATH=$(find build -name "$APP_NAME.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: $APP_NAME.app not found in build/"
+            find build -type d -maxdepth 4
+            exit 1
+          fi
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "Found app at: $APP_PATH"
+
       - name: Create DMG
         run: |
           brew install create-dmg || true
+
+          # Simple DMG creation — skip Finder layout if AppleScript fails in CI
+          mkdir -p build/dmg-staging
+          cp -R "${{ steps.app.outputs.APP_PATH }}" build/dmg-staging/
+
+          # Try pretty DMG first, fall back to simple hdiutil if create-dmg fails
           create-dmg \
             --volname "$APP_NAME" \
             --window-pos 200 120 \
             --window-size 600 400 \
             --icon-size 100 \
-            --icon "$APP_NAME.app" 150 190 \
             --app-drop-link 450 190 \
             --no-internet-enable \
             "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg" \
-            "build/export/$APP_NAME.app" \
-            || true
-          # create-dmg returns non-zero even on success sometimes; verify file exists
+            "build/dmg-staging/" \
+            || {
+              echo "create-dmg with layout failed, creating simple DMG..."
+              hdiutil create \
+                -volname "$APP_NAME" \
+                -srcfolder "build/dmg-staging" \
+                -ov -format UDZO \
+                "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg"
+            }
+
           ls -la "build/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg"
 
       - name: Import notarization credentials
