@@ -84,14 +84,28 @@ actor ConfirmationService {
 
 // MARK: - ConfirmationUIHandler
 
-/// Real UI handler. Placeholder that always approves until wired to ChatState UI in Task 12.
+/// Real UI handler that posts a `ConfirmationRequest` to `ChatState` and waits for the
+/// user's response via a checked continuation.
 @MainActor
 final class ConfirmationUIHandler: ConfirmationUIHandling {
+    weak var chatState: ChatState?
+
     nonisolated func requestConfirmation(
         toolIdentifier: String,
         description: String,
         tier: ActionTier
     ) async -> Bool {
-        await MainActor.run { true }
+        await withCheckedContinuation { continuation in
+            let request = ConfirmationRequest(
+                id: UUID(),
+                toolIdentifier: toolIdentifier,
+                description: description,
+                tier: tier,
+                continuation: OneShotContinuation(continuation)
+            )
+            Task { @MainActor in
+                self.chatState?.pendingConfirmation = request
+            }
+        }
     }
 }

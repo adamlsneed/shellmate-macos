@@ -20,6 +20,11 @@ struct ChatView: View {
                         if chatState.messages.isEmpty && !chatState.isStreaming { emptyState }
                         ForEach(chatState.messages) { message in MessageBubble(message: message) }
                         ForEach(chatState.currentToolCalls) { s in streamingToolCall(s) }
+                        if let confirmation = chatState.pendingConfirmation {
+                            ConfirmationCardView(request: confirmation) {
+                                chatState.pendingConfirmation = nil
+                            }
+                        }
                         if chatState.isStreaming && !chatState.currentStreamingText.isEmpty {
                             MessageBubble(message: ChatMessage(role: .assistant, content: chatState.currentStreamingText))
                         }
@@ -88,6 +93,7 @@ struct ChatView: View {
         let appleScriptService = AppleScriptService(shellService: shellService)
         let registry = ToolRegistry()
         let uiHandler = ConfirmationUIHandler()
+        uiHandler.chatState = chatState
         let confirmation = ConfirmationService(uiHandler: uiHandler)
         let permissions = PermissionManager()
         let executor = ToolExecutor(registry: registry, confirmationService: confirmation, permissionManager: permissions)
