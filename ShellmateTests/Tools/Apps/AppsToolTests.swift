@@ -9,10 +9,10 @@ struct AppsToolTests {
 
     // MARK: - AppsProvider
 
-    @Test("provider has 7 tools")
+    @Test("provider has 12 tools (7 apps + 5 process)")
     func providerToolCount() {
         let provider = AppsProvider(shellService: shellService)
-        #expect(provider.tools.count == 7)
+        #expect(provider.tools.count == 12)
         #expect(provider.category == .apps)
         #expect(!provider.displayName.isEmpty)
     }
