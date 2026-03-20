@@ -25,7 +25,6 @@ struct ProcessListTool: AgentTool {
         let limit = limitStr.flatMap(Int.init) ?? 20
         let filter = parameters["filter"] as? String
 
-        let sortFlag = sortBy == "memory" ? "-m" : "-r"
         // Use ps with sort
         var command = "ps aux | head -1; ps aux | tail -n +2 | sort -k \(sortBy == "memory" ? "4" : "3") -rn"
 

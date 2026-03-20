@@ -94,7 +94,7 @@ struct ChatView: View {
         sendTask = Task {
             await registry.register(ShellProvider(shellService: shellService))
             await registry.register(FilesProvider(shellService: shellService))
-            await registry.register(WebProvider())
+            await registry.register(WebProvider(shellService: shellService))
             await registry.register(SystemProvider(shellService: shellService))
             await registry.register(ClipboardProvider())
             await registry.register(DisplayProvider(shellService: shellService))
@@ -102,6 +102,9 @@ struct ChatView: View {
             await registry.register(CalendarProvider())
             await registry.register(RemindersProvider())
             await registry.register(ContactsProvider())
+            await registry.register(AppsProvider(shellService: shellService))
+            await registry.register(DeveloperProvider(shellService: shellService))
+            await registry.register(NetworkProvider(shellService: shellService))
             await loop.run(messages: msgs, system: sp, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
         }
     }
