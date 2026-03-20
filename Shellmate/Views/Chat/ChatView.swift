@@ -85,6 +85,7 @@ struct ChatView: View {
         if let cfg = try? cs.readConfig() { for cat in ToolDenyCategory.allCases { if cfg.capabilities.tools.deny.contains(cat.rawValue) { deny.append(cat) } } }
         let msgs: [SendableDict] = chatState.messages.map { SendableDict(["role": $0.role.rawValue, "content": $0.content]) }
         let shellService = ShellService()
+        let appleScriptService = AppleScriptService(shellService: shellService)
         let registry = ToolRegistry()
         let uiHandler = ConfirmationUIHandler()
         let confirmation = ConfirmationService(uiHandler: uiHandler)
@@ -105,6 +106,12 @@ struct ChatView: View {
             await registry.register(AppsProvider(shellService: shellService))
             await registry.register(DeveloperProvider(shellService: shellService))
             await registry.register(NetworkProvider(shellService: shellService))
+            await registry.register(NotesProvider(appleScriptService: appleScriptService))
+            await registry.register(EmailProvider(shellService: shellService, appleScriptService: appleScriptService))
+            await registry.register(AutomationProvider(shellService: shellService))
+            await registry.register(MediaProvider(shellService: shellService, appleScriptService: appleScriptService))
+            await registry.register(TTSProvider(shellService: shellService))
+            await registry.register(WindowProvider())
             await loop.run(messages: msgs, system: sp, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
         }
     }

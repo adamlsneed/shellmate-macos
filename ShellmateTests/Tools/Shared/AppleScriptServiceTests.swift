@@ -19,11 +19,14 @@ struct AppleScriptServiceTests {
 
     @Test("sanitize blocks injection via embedded quotes")
     func sanitizeBlocksInjection() {
-        // An attacker might try: foo" & do shell script "rm -rf /"
-        let malicious = #"foo" & do shell script "rm -rf /"#
+        // An attacker might try to break out of a string with embedded quotes
+        let malicious = "foo\" & do shell script \"rm -rf /\""
         let sanitized = AppleScriptService.sanitize(malicious)
-        #expect(!sanitized.contains("\" &"))
-        #expect(sanitized.contains("\\\""))
+        // All 3 double quotes in the input must be escaped
+        let escapedQuoteCount = sanitized.components(separatedBy: "\\\"").count - 1
+        #expect(escapedQuoteCount == 3)
+        // The sanitized string should not allow breaking out of an AppleScript string literal
+        #expect(sanitized == "foo\\\" & do shell script \\\"rm -rf /\\\"")
     }
 
     @Test("execute simple script returns result")

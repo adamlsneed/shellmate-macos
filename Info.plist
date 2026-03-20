@@ -32,5 +32,11 @@
     <string>Shellmate needs reminders access to create, complete, and manage your reminders.</string>
     <key>NSContactsUsageDescription</key>
     <string>Shellmate needs contacts access to look up contact information and add new contacts on your behalf.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Shellmate needs automation access to interact with Notes, Mail, Music, and other apps on your behalf.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Shellmate needs screen capture access to take screenshots when you ask.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Shellmate needs microphone access for voice dictation and speech recognition.</string>
 </dict>
 </plist>
