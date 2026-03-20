@@ -86,8 +86,11 @@ struct ChatView: View {
         guard let apiKey = aiConfig.resolveApiKey() else { chatState.error = "No API key configured."; chatState.isStreaming = false; return }
         let ws = WorkspaceService(); let sp: String
         if ws.isSetUp, let s = try? String(contentsOf: ws.workspacePath.appendingPathComponent("SYSTEM.md"), encoding: .utf8) { sp = s } else { sp = "You are Shellmate, a helpful Mac assistant." }
-        let cs = ConfigService(); var deny: [ToolDenyCategory] = []
-        if let cfg = try? cs.readConfig() { for cat in ToolDenyCategory.allCases { if cfg.capabilities.tools.deny.contains(cat.rawValue) { deny.append(cat) } } }
+        let cs = ConfigService()
+        let capConfig = (try? cs.readConfig())?.capabilities ?? CapabilitiesConfig()
+        var deny: [ToolDenyCategory] = []
+        for cat in ToolDenyCategory.allCases { if capConfig.tools.deny.contains(cat.rawValue) { deny.append(cat) } }
+        let enabledSet = Set(capConfig.enabledCategories)
         let msgs: [SendableDict] = chatState.messages.map { SendableDict(["role": $0.role.rawValue, "content": $0.content]) }
         let shellService = ShellService()
         let appleScriptService = AppleScriptService(shellService: shellService)
@@ -99,25 +102,38 @@ struct ChatView: View {
         let executor = ToolExecutor(registry: registry, confirmationService: confirmation, permissionManager: permissions)
         let loop = ToolUseLoop(executor: executor)
         sendTask = Task {
-            await registry.register(ShellProvider(shellService: shellService))
-            await registry.register(FilesProvider(shellService: shellService))
-            await registry.register(WebProvider(shellService: shellService))
-            await registry.register(SystemProvider(shellService: shellService))
-            await registry.register(ClipboardProvider())
-            await registry.register(DisplayProvider(shellService: shellService))
-            await registry.register(AudioProvider(shellService: shellService))
-            await registry.register(CalendarProvider())
-            await registry.register(RemindersProvider())
-            await registry.register(ContactsProvider())
-            await registry.register(AppsProvider(shellService: shellService))
-            await registry.register(DeveloperProvider(shellService: shellService))
-            await registry.register(NetworkProvider(shellService: shellService))
-            await registry.register(NotesProvider(appleScriptService: appleScriptService))
-            await registry.register(EmailProvider(shellService: shellService, appleScriptService: appleScriptService))
-            await registry.register(AutomationProvider(shellService: shellService))
-            await registry.register(MediaProvider(shellService: shellService, appleScriptService: appleScriptService))
-            await registry.register(TTSProvider(shellService: shellService))
-            await registry.register(WindowProvider())
+            // Apply auto-approve settings from config
+            for catRaw in capConfig.autoApproveCategories {
+                if let cat = ToolCategory(rawValue: catRaw) {
+                    await confirmation.setAutoApprove(for: cat, enabled: true)
+                }
+            }
+
+            // Register only enabled providers
+            let allProviders: [ToolProvider] = [
+                ShellProvider(shellService: shellService),
+                FilesProvider(shellService: shellService),
+                WebProvider(shellService: shellService),
+                SystemProvider(shellService: shellService),
+                ClipboardProvider(),
+                DisplayProvider(shellService: shellService),
+                AudioProvider(shellService: shellService),
+                CalendarProvider(),
+                RemindersProvider(),
+                ContactsProvider(),
+                AppsProvider(shellService: shellService),
+                DeveloperProvider(shellService: shellService),
+                NetworkProvider(shellService: shellService),
+                NotesProvider(appleScriptService: appleScriptService),
+                EmailProvider(shellService: shellService, appleScriptService: appleScriptService),
+                AutomationProvider(shellService: shellService),
+                MediaProvider(shellService: shellService, appleScriptService: appleScriptService),
+                TTSProvider(shellService: shellService),
+                WindowProvider(),
+            ]
+            for provider in allProviders where enabledSet.contains(provider.category.rawValue) {
+                await registry.register(provider)
+            }
             await loop.run(messages: msgs, system: sp, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
         }
     }
