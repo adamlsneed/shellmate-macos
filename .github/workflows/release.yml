@@ -70,6 +70,29 @@ jobs:
             cp -R .build/release/Shellmate_Shellmate.bundle "$APP_DIR/Resources/"
           fi
 
+          # Embed Sparkle.framework
+          mkdir -p "$APP_DIR/Frameworks"
+          SPARKLE_FW=$(find .build/artifacts -path "*/macos-arm64*/Sparkle.framework" -type d | head -1)
+          if [ -n "$SPARKLE_FW" ]; then
+            cp -R "$SPARKLE_FW" "$APP_DIR/Frameworks/"
+            echo "Embedded Sparkle.framework from $SPARKLE_FW"
+          else
+            echo "::error::Sparkle.framework not found in build artifacts"
+            exit 1
+          fi
+
+          # Add @executable_path/../Frameworks to rpath so the binary finds Sparkle
+          install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_DIR/MacOS/Shellmate"
+          echo "Added Frameworks rpath to binary"
+
+          # Build app icon from Assets.xcassets PNGs
+          ICONSET_DIR="build/AppIcon.iconset"
+          ICON_SRC="Shellmate/Resources/Assets.xcassets/AppIcon.appiconset"
+          mkdir -p "$ICONSET_DIR"
+          cp "$ICON_SRC"/icon_*.png "$ICONSET_DIR/"
+          iconutil --convert icns --output "$APP_DIR/Resources/AppIcon.icns" "$ICONSET_DIR"
+          echo "Generated AppIcon.icns"
+
           # Generate Info.plist with version from tag
           cat > "$APP_DIR/Info.plist" << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
@@ -88,6 +111,8 @@ jobs:
               <string>$VERSION</string>
               <key>CFBundleExecutable</key>
               <string>$APP_NAME</string>
+              <key>CFBundleIconFile</key>
+              <string>AppIcon</string>
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>CFBundleSignature</key>
@@ -134,7 +159,29 @@ jobs:
 
       - name: Code sign app bundle
         run: |
-          codesign --force --deep --sign "${{ secrets.DEVELOPER_ID_APPLICATION }}" \
+          IDENTITY="${{ secrets.DEVELOPER_ID_APPLICATION }}"
+
+          # Sign Sparkle framework components inside-out
+          SPARKLE_DIR="build/$APP_NAME.app/Contents/Frameworks/Sparkle.framework/Versions/B"
+          codesign --force --sign "$IDENTITY" --options runtime \
+            "$SPARKLE_DIR/XPCServices/Downloader.xpc/Contents/MacOS/Downloader" || true
+          codesign --force --sign "$IDENTITY" --options runtime \
+            "$SPARKLE_DIR/XPCServices/Downloader.xpc" || true
+          codesign --force --sign "$IDENTITY" --options runtime \
+            "$SPARKLE_DIR/XPCServices/Installer.xpc/Contents/MacOS/Installer" || true
+          codesign --force --sign "$IDENTITY" --options runtime \
+            "$SPARKLE_DIR/XPCServices/Installer.xpc" || true
+          codesign --force --sign "$IDENTITY" --options runtime \
+            "$SPARKLE_DIR/Autoupdate" || true
+          codesign --force --sign "$IDENTITY" --options runtime \
+            "$SPARKLE_DIR/Updater.app/Contents/MacOS/Updater" || true
+          codesign --force --sign "$IDENTITY" --options runtime \
+            "$SPARKLE_DIR/Updater.app" || true
+          codesign --force --sign "$IDENTITY" --options runtime \
+            "build/$APP_NAME.app/Contents/Frameworks/Sparkle.framework"
+
+          # Sign the main app bundle
+          codesign --force --sign "$IDENTITY" \
             --options runtime \
             --entitlements build/Shellmate.entitlements \
             "build/$APP_NAME.app"
