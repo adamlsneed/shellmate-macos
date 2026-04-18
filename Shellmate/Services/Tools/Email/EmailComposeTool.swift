@@ -43,12 +43,27 @@ struct EmailComposeTool: AgentTool {
             return .error("Missing required parameter: body")
         }
 
+        let cc = parameters["cc"] as? String
+        let script = Self.renderScript(to: to, subject: subject, body: body, cc: cc)
+
+        do {
+            let result = try await appleScriptService.execute(script: script, timeout: 15)
+            return .success(result + "\nNote: The email has NOT been sent. Please review and click Send manually.")
+        } catch {
+            return .error("Failed to open compose window: \(error.localizedDescription)")
+        }
+    }
+
+    /// Build the AppleScript that opens a Mail compose window. Extracted as a
+    /// pure function so tests can verify the rendered script never invokes
+    /// Mail's `send` verb, regardless of input.
+    static func renderScript(to: String, subject: String, body: String, cc: String?) -> String {
         let safeTo = AppleScriptService.sanitize(to)
         let safeSubject = AppleScriptService.sanitize(subject)
         let safeBody = AppleScriptService.sanitize(body)
 
         var ccPart = ""
-        if let cc = parameters["cc"] as? String, !cc.isEmpty {
+        if let cc, !cc.isEmpty {
             let safeCc = AppleScriptService.sanitize(cc)
             ccPart = """
 
@@ -58,7 +73,7 @@ struct EmailComposeTool: AgentTool {
 
         // CRITICAL: We create a visible outgoing message but do NOT send it.
         // The user must click Send manually.
-        let script = """
+        return """
         tell application "Mail"
             set newMsg to make new outgoing message with properties {subject:"\(safeSubject)", content:"\(safeBody)", visible:true}
             tell newMsg
@@ -68,13 +83,6 @@ struct EmailComposeTool: AgentTool {
             return "Compose window opened for: \(safeTo)"
         end tell
         """
-
-        do {
-            let result = try await appleScriptService.execute(script: script, timeout: 15)
-            return .success(result + "\nNote: The email has NOT been sent. Please review and click Send manually.")
-        } catch {
-            return .error("Failed to open compose window: \(error.localizedDescription)")
-        }
     }
 
     func confirmationDescription(parameters: [String: Any]) -> String {
