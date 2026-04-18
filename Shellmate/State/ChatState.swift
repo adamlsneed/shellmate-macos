@@ -36,6 +36,15 @@ final class ChatState {
         isStreaming = false
         currentStreamingText = ""
         currentToolCalls = []
+        cancelPendingConfirmation()
+    }
+
+    /// Resume any pending confirmation as denied and clear it.
+    /// Idempotent — safe to call when no confirmation is pending.
+    func cancelPendingConfirmation() {
+        guard let req = pendingConfirmation else { return }
+        req.continuation.resume(returning: false)
+        pendingConfirmation = nil
     }
 
     func clearConversation() {

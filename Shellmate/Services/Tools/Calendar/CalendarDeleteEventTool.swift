@@ -42,4 +42,19 @@ struct CalendarDeleteEventTool: AgentTool {
         let query = parameters["search_query"] as? String ?? "event"
         return "Delete calendar event matching '\(query)'"
     }
+
+    /// Resolve the actual event before prompting so the user sees what will be deleted.
+    /// Falls back (returns nil → sync description) if access is denied or nothing matches.
+    func confirmationDescription(parameters: [String: Any]) async -> String? {
+        guard let query = parameters["search_query"] as? String else { return nil }
+        guard let info = await service.eventInfo(matching: query) else { return nil }
+        return "Delete calendar event '\(info.title)' on \(Self.dateFormatter.string(from: info.startDate))"
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
 }
