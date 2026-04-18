@@ -22,21 +22,45 @@ DMG_FILENAME=$(basename "$DMG_PATH")
 RELEASE_URL="https://github.com/adamlsneed/shellmate-macos/releases/download/v${VERSION}/${DMG_FILENAME}"
 PUB_DATE=$(date -u "+%a, %d %b %Y %H:%M:%S +0000")
 
-# Generate EdDSA signature if private key is available
+# Generate EdDSA signature if private key is available.
+# Hard-fail (rather than silently ship an unsigned appcast) if the key is set
+# but signing can't run — Sparkle refuses unsigned updates when SUPublicEDKey
+# is configured, so a silent miss means auto-update is broken for every user.
 EDDSA_SIGNATURE=""
 if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
-    # Write private key to temp file for signing
-    KEYFILE=$(mktemp)
-    echo "$SPARKLE_PRIVATE_KEY" > "$KEYFILE"
-
-    # Try to use Sparkle's sign_update tool if available
-    if command -v sign_update &> /dev/null; then
-        EDDSA_SIGNATURE=$(sign_update "$DMG_PATH" --ed-key-file "$KEYFILE" 2>/dev/null || echo "")
-    elif [ -f ".build/artifacts/sparkle/Sparkle/bin/sign_update" ]; then
-        EDDSA_SIGNATURE=$(.build/artifacts/sparkle/Sparkle/bin/sign_update "$DMG_PATH" --ed-key-file "$KEYFILE" 2>/dev/null || echo "")
+    # Locate sign_update: $PATH first, then anywhere under .build/artifacts
+    # (the exact SPM path varies between Sparkle versions).
+    SIGN_UPDATE=$(command -v sign_update 2>/dev/null || true)
+    if [ -z "$SIGN_UPDATE" ]; then
+        SIGN_UPDATE=$(find .build/artifacts -name sign_update -type f -perm +111 2>/dev/null | head -1 || true)
     fi
+    if [ -z "$SIGN_UPDATE" ]; then
+        echo "::error::SPARKLE_PRIVATE_KEY is set but sign_update is not on PATH and not under .build/artifacts. Auto-update would silently break."
+        exit 1
+    fi
+    echo "Using sign_update at: $SIGN_UPDATE"
 
-    rm -f "$KEYFILE"
+    # Write private key to temp file. Use printf — `echo` appends a newline
+    # which sign_update's --ed-key-file does not tolerate.
+    KEYFILE=$(mktemp)
+    chmod 600 "$KEYFILE"
+    # shellcheck disable=SC2059
+    printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEYFILE"
+
+    # Run sign_update without swallowing errors — capture stderr so we can
+    # report a real failure cause if signing fails.
+    if ! EDDSA_SIGNATURE=$("$SIGN_UPDATE" "$DMG_PATH" --ed-key-file "$KEYFILE" 2>"$KEYFILE.err"); then
+        SIGN_ERR=$(cat "$KEYFILE.err")
+        rm -f "$KEYFILE" "$KEYFILE.err"
+        echo "::error::sign_update failed: $SIGN_ERR"
+        exit 1
+    fi
+    rm -f "$KEYFILE" "$KEYFILE.err"
+
+    if [ -z "$EDDSA_SIGNATURE" ]; then
+        echo "::error::sign_update returned an empty signature"
+        exit 1
+    fi
 fi
 
 # Build the enclosure attributes
@@ -73,5 +97,5 @@ echo "  URL: ${RELEASE_URL}"
 if [ -n "$EDDSA_SIGNATURE" ]; then
     echo "  EdDSA signature: present"
 else
-    echo "  WARNING: No EdDSA signature (SPARKLE_PRIVATE_KEY not set or sign_update not found)"
+    echo "  WARNING: No EdDSA signature (SPARKLE_PRIVATE_KEY not set — auto-update will not work for users)"
 fi
