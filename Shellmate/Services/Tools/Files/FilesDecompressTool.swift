@@ -35,12 +35,56 @@ struct FilesDecompressTool: AgentTool {
             return .error("Archive not found: \(archive)")
         }
 
+        if SecurityPolicy.isPathBlocked(archiveURL.path) {
+            return .error("Access denied: archive path is restricted")
+        }
+
         // Determine destination
         let destinationPath: String
         if let dest = parameters["destination"] as? String, !dest.isEmpty {
             destinationPath = dest
         } else {
             destinationPath = archiveURL.deletingLastPathComponent().path
+        }
+
+        let destinationURL = URL(fileURLWithPath: destinationPath).standardized
+
+        if SecurityPolicy.isPathBlocked(destinationURL.path) {
+            return .error("Access denied: destination path is restricted")
+        }
+
+        // Pre-scan archive entries to defend against zip-slip and writes into blocked paths.
+        // ditto resolves `..` and follows symlinks; we must validate before extracting.
+        let listResult = try await shellService.run(
+            executable: "/usr/bin/unzip",
+            arguments: ["-Z1", archiveURL.path],
+            timeout: 30
+        )
+        guard listResult.succeeded else {
+            return .error("Failed to list archive contents: \(listResult.stderr)")
+        }
+
+        let entries = listResult.stdout
+            .split(whereSeparator: \.isNewline)
+            .map { String($0) }
+            .filter { !$0.isEmpty }
+
+        let destResolvedPrefix = destinationURL.resolvingSymlinksInPath().path
+            .appending(destinationURL.path.hasSuffix("/") ? "" : "/")
+
+        for entry in entries {
+            // Reject absolute paths in entries
+            if entry.hasPrefix("/") {
+                return .error("Archive contains absolute path entry: \(entry)")
+            }
+            let entryURL = destinationURL.appendingPathComponent(entry).standardized
+            let entryResolved = entryURL.resolvingSymlinksInPath().path
+            if !(entryResolved + "/").hasPrefix(destResolvedPrefix) {
+                return .error("Archive entry escapes destination: \(entry)")
+            }
+            if SecurityPolicy.isPathBlocked(entryResolved) {
+                return .error("Archive entry resolves to a restricted path: \(entry)")
+            }
         }
 
         // Create destination directory if needed

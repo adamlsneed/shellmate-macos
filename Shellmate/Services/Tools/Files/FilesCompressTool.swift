@@ -49,12 +49,20 @@ struct FilesCompressTool: AgentTool {
                 .appendingPathComponent("\(baseName).zip").path
         }
 
-        // Verify all input paths exist
+        // Verify all input paths exist and aren't restricted (prevents exfiltration of
+        // ~/.ssh, ~/.aws, ~/Library/Keychains, etc. into a user-readable archive).
         for path in paths {
             let url = URL(fileURLWithPath: path).standardized
+            if SecurityPolicy.isPathBlocked(url.path) {
+                return .error("Access denied: input path is restricted (\(path))")
+            }
             guard FileManager.default.fileExists(atPath: url.path) else {
                 return .error("File not found: \(path)")
             }
+        }
+
+        if SecurityPolicy.isPathBlocked(outputPath) {
+            return .error("Access denied: output path is restricted")
         }
 
         // Use ditto with structured args for each input path

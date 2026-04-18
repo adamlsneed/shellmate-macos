@@ -31,6 +31,10 @@ struct PDFReadTool: AgentTool {
             return .error("Missing required parameter: path")
         }
 
+        if SecurityPolicy.isPathBlocked(path) {
+            return .error("Access denied: path is restricted")
+        }
+
         guard FileManager.default.fileExists(atPath: path) else {
             return .error("File not found: \(path)")
         }

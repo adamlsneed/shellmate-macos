@@ -30,6 +30,10 @@ struct WebDownloadTool: AgentTool {
             return .error("Missing required parameter: url")
         }
 
+        if SecurityPolicy.isURLBlocked(urlString) {
+            return .error("Access denied: URL is restricted (private IP, localhost, or non-HTTP)")
+        }
+
         guard URL(string: urlString) != nil else {
             return .error("Invalid URL: \(urlString)")
         }
@@ -46,6 +50,10 @@ struct WebDownloadTool: AgentTool {
         }
 
         let outputPath = (expandedDest as NSString).appendingPathComponent(filename)
+
+        if SecurityPolicy.isPathBlocked(outputPath) {
+            return .error("Access denied: destination path is restricted")
+        }
 
         // Ensure destination directory exists
         try FileManager.default.createDirectory(atPath: expandedDest, withIntermediateDirectories: true)

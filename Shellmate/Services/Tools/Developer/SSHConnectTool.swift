@@ -5,7 +5,7 @@ struct SSHConnectTool: AgentTool {
     let identifier = "ssh_connect"
     let toolDescription = "Execute a command on a remote host via SSH. Requires SSH keys to be configured."
     let category = ToolCategory.developer
-    let actionTier = ActionTier.write
+    let actionTier = ActionTier.destructive
     let parameterSchema = ToolInputSchema(
         type: "object",
         properties: [
