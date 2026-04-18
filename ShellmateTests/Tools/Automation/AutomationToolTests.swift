@@ -81,7 +81,7 @@ struct AutomationToolTests {
             let tool = CronAddTool(shellService: shell)
             #expect(tool.identifier == "cron_add")
             #expect(tool.category == .automation)
-            #expect(tool.actionTier == .write)
+            #expect(tool.actionTier == .destructive)
         }
 
         @Test("requires schedule parameter")
@@ -169,7 +169,7 @@ struct AutomationToolTests {
             let tool = LaunchdCreateTool(shellService: shell)
             #expect(tool.identifier == "launchd_create")
             #expect(tool.category == .automation)
-            #expect(tool.actionTier == .write)
+            #expect(tool.actionTier == .destructive)
         }
 
         @Test("requires label parameter")

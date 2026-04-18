@@ -134,7 +134,8 @@ struct ChatView: View {
             for provider in allProviders where enabledSet.contains(provider.category.rawValue) {
                 await registry.register(provider)
             }
-            await loop.run(messages: msgs, system: sp, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
+            let enabledCats = Set(capConfig.enabledCategories.compactMap { ToolCategory(rawValue: $0) })
+            await loop.run(messages: msgs, system: sp, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, enabledCategories: enabledCats, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
         }
     }
 

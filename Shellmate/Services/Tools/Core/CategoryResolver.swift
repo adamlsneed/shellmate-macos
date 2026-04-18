@@ -24,13 +24,15 @@ struct CategoryResolver: Sendable {
         .system:      ["system info", "cpu", "memory", "ram", "disk space", "storage", "battery", "uptime"],
         .display:     ["brightness", "dark mode", "night shift", "resolution", "display"],
         .audio:       ["volume", "mute", "audio", "sound", "music", "playing", "song", "speaker"],
-        .screenshot:  ["screenshot", "screen capture", "screen shot"],
         .apps:        ["install", "uninstall", "update app", "homebrew", "brew", "app store"],
         .web:         ["search the web", "look up", "fetch page", "download"],
         .developer:   ["git", "docker", "ssh", "port", "commit", "branch", "pull", "push"],
         .network:     ["wifi", "network", "bluetooth", "ping", "dns", "vpn", "internet"],
-        .automation:  ["shortcut", "cron", "schedule", "automate", "launch agent"],
-        .media:       ["image", "photo", "pdf", "resize", "convert image", "ocr"],
+        .automation:  ["shortcut", "cron", "automate", "launch agent"],
+        // ScreenshotCaptureTool lives in MediaProvider (.media), so screenshot keywords
+        // route to .media. The legacy .screenshot enum case is unused for routing.
+        .media:       ["image", "photo", "pdf", "resize", "convert image", "ocr",
+                       "screenshot", "screen capture", "screen shot"],
         .tts:         ["speak", "read aloud", "text to speech", "voice"],
     ]
 

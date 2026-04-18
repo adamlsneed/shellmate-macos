@@ -37,6 +37,10 @@ struct ImageConvertTool: AgentTool {
             return .error("Missing required parameter: format")
         }
 
+        if SecurityPolicy.isPathBlocked(path) {
+            return .error("Access denied: input path is restricted")
+        }
+
         guard FileManager.default.fileExists(atPath: path) else {
             return .error("File not found: \(path)")
         }
@@ -53,6 +57,10 @@ struct ImageConvertTool: AgentTool {
             let ext = format == "jpeg" ? "jpg" : format
             let url = URL(fileURLWithPath: path)
             outputPath = url.deletingPathExtension().appendingPathExtension(ext).path
+        }
+
+        if SecurityPolicy.isPathBlocked(outputPath) {
+            return .error("Access denied: output path is restricted")
         }
 
         let result = try await shellService.run(

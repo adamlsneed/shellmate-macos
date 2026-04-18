@@ -163,11 +163,16 @@ actor ShellService {
     // MARK: - Environment
 
     /// Return the cached shell environment (populated on first call).
+    ///
+    /// Runs `/bin/zsh -ilc env` so PATH additions from the user's `~/.zshrc`,
+    /// `~/.zprofile`, etc. are included. Without this, `which("brew")` fails on
+    /// most user Macs even when Homebrew is installed.
     func environment() async -> [String: String] {
         if let cached = environmentCache { return cached }
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-ilc", "env"]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice

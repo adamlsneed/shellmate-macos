@@ -48,6 +48,13 @@ struct PDFSplitTool: AgentTool {
         else if let e = parameters["end_page"] as? Double { endPage = Int(e) }
         else { return .error("Missing required parameter: end_page") }
 
+        if SecurityPolicy.isPathBlocked(path) {
+            return .error("Access denied: input path is restricted")
+        }
+        if SecurityPolicy.isPathBlocked(output) {
+            return .error("Access denied: output path is restricted")
+        }
+
         guard FileManager.default.fileExists(atPath: path) else {
             return .error("File not found: \(path)")
         }

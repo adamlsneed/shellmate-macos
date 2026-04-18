@@ -36,10 +36,17 @@ struct PDFMergeTool: AgentTool {
             return .error("At least 2 PDF files are required to merge.")
         }
 
+        if SecurityPolicy.isPathBlocked(output) {
+            return .error("Access denied: output path is restricted")
+        }
+
         let merged = PDFDocument()
         var totalPages = 0
 
         for path in paths {
+            if SecurityPolicy.isPathBlocked(path) {
+                return .error("Access denied: input path is restricted (\(path))")
+            }
             guard FileManager.default.fileExists(atPath: path) else {
                 return .error("File not found: \(path)")
             }

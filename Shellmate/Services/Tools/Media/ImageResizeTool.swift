@@ -37,6 +37,10 @@ struct ImageResizeTool: AgentTool {
             return .error("Missing required parameter: path")
         }
 
+        if SecurityPolicy.isPathBlocked(path) {
+            return .error("Access denied: input path is restricted")
+        }
+
         guard FileManager.default.fileExists(atPath: path) else {
             return .error("File not found: \(path)")
         }
@@ -51,6 +55,9 @@ struct ImageResizeTool: AgentTool {
         // If output path specified, copy first
         let workPath: String
         if let output = parameters["output"] as? String {
+            if SecurityPolicy.isPathBlocked(output) {
+                return .error("Access denied: output path is restricted")
+            }
             try FileManager.default.copyItem(atPath: path, toPath: output)
             workPath = output
         } else {

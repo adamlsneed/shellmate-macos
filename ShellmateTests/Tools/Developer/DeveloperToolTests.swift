@@ -180,7 +180,7 @@ struct DeveloperToolTests {
             let tool = SSHConnectTool(shellService: ShellService())
             #expect(tool.identifier == "ssh_connect")
             #expect(tool.category == .developer)
-            #expect(tool.actionTier == .write)
+            #expect(tool.actionTier == .destructive)
         }
 
         @Test("returns error for missing params")

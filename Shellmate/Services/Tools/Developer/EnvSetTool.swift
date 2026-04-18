@@ -43,6 +43,12 @@ struct EnvSetTool: AgentTool {
             return .error("Missing required parameter: value")
         }
 
+        // Reject keys that aren't valid POSIX identifiers — prevents injection of
+        // newlines or `=value\nrm -rf /` payloads into ~/.zshrc.
+        guard key.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil else {
+            return .error("Invalid variable name '\(key)'. Use letters, digits, and underscores; must not start with a digit.")
+        }
+
         let persist = parameters["persist"] as? Bool ?? false
         let isSecret = Self.secretPatterns.contains { key.uppercased().contains($0) }
 
@@ -54,21 +60,34 @@ struct EnvSetTool: AgentTool {
             }
 
             let profilePath = NSString(string: "~/.zshrc").expandingTildeInPath
-            let exportLine = "\nexport \(key)=\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\"\n"
+            // Single-quote the value so backslashes, double quotes, and dollar signs
+            // are all literal. Embedded single quotes are escaped via the standard
+            // '\'' trick (close quote, escaped quote, reopen quote).
+            let escapedValue = value.replacingOccurrences(of: "'", with: "'\\''")
+            let exportLine = "\nexport \(key)='\(escapedValue)'\n"
 
             do {
                 let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: profilePath))
                 handle.seekToEndOfFile()
                 handle.write(exportLine.data(using: .utf8)!)
                 handle.closeFile()
-                messages.append("Appended export to ~/.zshrc. Run 'source ~/.zshrc' or open a new terminal for it to take effect.")
+                messages.insert("Appended export to ~/.zshrc. Run 'source ~/.zshrc' or open a new terminal for it to take effect.", at: 0)
             } catch {
-                messages.append("Failed to write to ~/.zshrc: \(error.localizedDescription)")
+                return .error("Failed to write to ~/.zshrc: \(error.localizedDescription)")
             }
+        } else {
+            // Without persist=true, this tool cannot actually export the variable into
+            // the user's shell — the agent runs in Shellmate's own process. Be honest
+            // about that rather than reporting a misleading "Set FOO=bar" success.
+            messages.append("Note: \(key) was NOT exported to your shell. Pass persist=true to append an export to ~/.zshrc, or run `export \(key)=...` in your terminal directly.")
         }
 
-        // Set for current shell context (note: won't affect the app's own process, but the tool's description is clear)
-        messages.insert("Set \(key)=\(isSecret ? "[REDACTED]" : value)", at: 0)
+        if isSecret && !persist {
+            // Don't echo the value in the success message even when not persisting.
+            messages.insert("Acknowledged \(key)=[REDACTED]", at: 0)
+        } else if !persist {
+            messages.insert("Acknowledged \(key)=\(value)", at: 0)
+        }
         return .success(messages.joined(separator: "\n"))
     }
 }

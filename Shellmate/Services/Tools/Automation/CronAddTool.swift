@@ -5,7 +5,7 @@ struct CronAddTool: AgentTool {
     let identifier = "cron_add"
     let toolDescription = "Add a new cron job to the current user's crontab. Provide a full cron expression and command."
     let category = ToolCategory.automation
-    let actionTier = ActionTier.write
+    let actionTier = ActionTier.destructive
     let parameterSchema = ToolInputSchema(
         type: "object",
         properties: [

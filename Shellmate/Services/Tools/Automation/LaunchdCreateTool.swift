@@ -5,7 +5,7 @@ struct LaunchdCreateTool: AgentTool {
     let identifier = "launchd_create"
     let toolDescription = "Create a new launchd agent in ~/Library/LaunchAgents. Generates a plist file with the specified configuration."
     let category = ToolCategory.automation
-    let actionTier = ActionTier.write
+    let actionTier = ActionTier.destructive
     let parameterSchema = ToolInputSchema(
         type: "object",
         properties: [

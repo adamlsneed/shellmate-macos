@@ -39,13 +39,14 @@ actor ToolUseLoop {
         provider: AIProvider,
         model: String,
         apiKey: String,
+        enabledCategories: Set<ToolCategory>,
         denyCategories: [ToolDenyCategory] = [],
         onEvent: @Sendable @escaping (LoopEvent) -> Void
     ) async {
         let lastMessage = messages.last?.dict["content"] as? String ?? ""
         let resolvedCategories = categoryResolver.resolve(
             message: lastMessage,
-            enabledCategories: Set(await executor.registry.enabledCategories())
+            enabledCategories: enabledCategories
         )
         let availableTools = await executor.registry.toolSchemas(for: resolvedCategories, denyCategories: denyCategories)
         var conversationMessages: [[String: Any]] = messages.map(\.dict)
