@@ -135,6 +135,35 @@ struct AutomationToolTests {
             let desc = tool.confirmationDescription(parameters: ["pattern": "echo hello"])
             #expect(desc.contains("echo hello"))
         }
+
+        // MARK: - Wipe-out protection (Phase D regression coverage)
+        //
+        // The unfixed CronRemoveTool would silently wipe the entire crontab when
+        // given an empty pattern (`grep -v ''` matches every non-empty line) or
+        // when a regex metacharacter happened to match every line. These tests
+        // pin the post-fix behavior — they exercise the parameter-validation
+        // path before any shell call, so they don't actually mutate the user's
+        // crontab.
+
+        @Test("rejects empty pattern with explanatory error")
+        func rejectsEmptyPattern() async throws {
+            let tool = CronRemoveTool(shellService: shell)
+            let result = try await tool.execute(parameters: ["pattern": ""])
+            #expect(result.isError)
+            #expect(result.content.lowercased().contains("empty"))
+            // The message must mention the consequence so the LLM doesn't
+            // simply retry with the same input.
+            #expect(result.content.lowercased().contains("crontab"))
+        }
+
+        @Test("rejects whitespace-only pattern")
+        func rejectsWhitespacePattern() async throws {
+            let tool = CronRemoveTool(shellService: shell)
+            for whitespace in ["   ", "\t", "\n", " \t\n "] {
+                let result = try await tool.execute(parameters: ["pattern": whitespace])
+                #expect(result.isError, "whitespace '\(whitespace.debugDescription)' should be rejected")
+            }
+        }
     }
 
     // MARK: - LaunchdListTool

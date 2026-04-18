@@ -96,6 +96,83 @@ struct EmailToolTests {
             let desc = tool.confirmationDescription(parameters: ["to": "test@test.com", "subject": "Hello"])
             #expect(desc.contains("test@test.com"))
         }
+
+        // MARK: - "Never sends" regression coverage (Phase D)
+
+        @Test("rendered script never invokes Mail's send verb")
+        func neverSendsBasic() {
+            let script = EmailComposeTool.renderScript(
+                to: "alice@example.com",
+                subject: "Hi",
+                body: "Hello",
+                cc: nil
+            )
+            // The script must NEVER contain Mail's `send` keyword as a verb,
+            // even after sanitize. Match it as a whole word so substrings like
+            // "sender" don't trigger.
+            #expect(!Self.containsAppleScriptVerb(script, verb: "send"))
+        }
+
+        @Test("rendered script with cc still never sends")
+        func neverSendsWithCc() {
+            let script = EmailComposeTool.renderScript(
+                to: "a@b.com",
+                subject: "X",
+                body: "Y",
+                cc: "c@d.com"
+            )
+            #expect(!Self.containsAppleScriptVerb(script, verb: "send"))
+        }
+
+        @Test("malicious subject cannot inject a send verb")
+        func cannotInjectSendViaSubject() {
+            // Classic break-out attempt: close the string, append a send command,
+            // reopen. sanitize should escape the quote so the payload becomes
+            // text inside the subject, not an AppleScript statement.
+            let evilSubject = #"Hi"} \nsend newMsg \ntell application "Mail" to set foo to {bar:""#
+            let script = EmailComposeTool.renderScript(
+                to: "victim@example.com",
+                subject: evilSubject,
+                body: "body",
+                cc: nil
+            )
+            #expect(!Self.containsAppleScriptVerb(script, verb: "send"))
+        }
+
+        @Test("malicious body cannot inject a send verb")
+        func cannotInjectSendViaBody() {
+            let evilBody = #"Hello"} activate ¬\nsend newMsg ¬\ntell application "Mail" to {x:""#
+            let script = EmailComposeTool.renderScript(
+                to: "victim@example.com",
+                subject: "subject",
+                body: evilBody,
+                cc: nil
+            )
+            #expect(!Self.containsAppleScriptVerb(script, verb: "send"))
+        }
+
+        @Test("rendered script preserves the recipient verbatim after sanitize")
+        func recipientPreservedAfterSanitize() {
+            let script = EmailComposeTool.renderScript(
+                to: "user.name+tag@example.com",
+                subject: "S",
+                body: "B",
+                cc: nil
+            )
+            #expect(script.contains("user.name+tag@example.com"))
+        }
+
+        /// Returns true if the script contains the given AppleScript verb as a
+        /// whole word (not as a substring of e.g. `sender` or `<verb>er`).
+        /// Used to assert "never sends" guarantees.
+        private static func containsAppleScriptVerb(_ script: String, verb: String) -> Bool {
+            // Word boundary on both sides — alphanumerics and underscores
+            // continue an identifier in AppleScript-ish syntax.
+            let pattern = "(?:^|[^A-Za-z0-9_])\(NSRegularExpression.escapedPattern(for: verb))(?:$|[^A-Za-z0-9_])"
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+            let range = NSRange(script.startIndex..., in: script)
+            return regex.firstMatch(in: script, range: range) != nil
+        }
     }
 
     // MARK: - EmailSummarizeUnreadTool
