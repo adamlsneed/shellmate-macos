@@ -156,6 +156,19 @@ actor CalendarService {
         return title
     }
 
+    /// Non-throwing lookup that returns a sendable snapshot of the first event
+    /// matching the query, or `nil` if access is denied or nothing matches.
+    /// Used by `confirmationDescription` to surface the actual target.
+    func eventInfo(matching query: String) async -> CalendarEventInfo? {
+        do {
+            try await ensureAccess()
+            let event = try findEvent(matching: query)
+            return snapshot(event)
+        } catch {
+            return nil
+        }
+    }
+
     /// Returns all user-visible calendars for events.
     func allCalendars() async throws -> [CalendarInfo] {
         try await ensureAccess()

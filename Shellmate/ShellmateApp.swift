@@ -5,6 +5,7 @@ import Sparkle
 struct ShellmateApp: App {
     @State private var appState = AppState()
     @State private var aiConfig = AIConfigState()
+    @State private var toolingState = ToolingState()
     // BRIDGE: NSApplicationDelegate for dock click, termination cleanup
     @NSApplicationDelegateAdaptor(AppLifecycleManager.self) private var lifecycleManager
     @StateObject private var updateService = SparkleUpdateService()
@@ -14,6 +15,7 @@ struct ShellmateApp: App {
             ContentView()
                 .environment(appState)
                 .environment(aiConfig)
+                .environment(toolingState)
                 .environmentObject(updateService)
                 .frame(minWidth: 800, minHeight: 600)
                 .onAppear {
@@ -60,6 +62,7 @@ struct ShellmateApp: App {
             SettingsView()
                 .environment(appState)
                 .environment(aiConfig)
+                .environment(toolingState)
                 .environmentObject(updateService)
         }
     }

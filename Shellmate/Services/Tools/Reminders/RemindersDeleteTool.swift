@@ -43,4 +43,20 @@ struct RemindersDeleteTool: AgentTool {
         let query = parameters["search_query"] as? String ?? "reminder"
         return "Delete reminder matching '\(query)'"
     }
+
+    func confirmationDescription(parameters: [String: Any]) async -> String? {
+        guard let query = parameters["search_query"] as? String else { return nil }
+        guard let info = await service.reminderInfo(matching: query) else { return nil }
+        if let due = info.dueDate {
+            return "Delete reminder '\(info.title)' (due \(Self.dateFormatter.string(from: due)))"
+        }
+        return "Delete reminder '\(info.title)'"
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
 }

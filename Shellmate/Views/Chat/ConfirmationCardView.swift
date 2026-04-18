@@ -33,6 +33,7 @@ struct ConfirmationCardView: View {
                     onDismiss()
                 }
                 .buttonStyle(.bordered)
+                .keyboardShortcut(.cancelAction)
             }
         }
         .padding()
@@ -44,5 +45,11 @@ struct ConfirmationCardView: View {
                     lineWidth: 1
                 )
         )
+        // If the card disappears without an explicit Approve/Deny click (window close,
+        // chat reset, view reflow), treat it as denied so the awaiting tool resumes.
+        // OneShotContinuation makes resume() idempotent — safe even after a button click.
+        .onDisappear {
+            request.continuation.resume(returning: false)
+        }
     }
 }

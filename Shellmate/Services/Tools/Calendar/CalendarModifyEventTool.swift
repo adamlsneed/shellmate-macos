@@ -91,4 +91,17 @@ struct CalendarModifyEventTool: AgentTool {
         let query = parameters["search_query"] as? String ?? "event"
         return "Modify calendar event matching '\(query)'"
     }
+
+    func confirmationDescription(parameters: [String: Any]) async -> String? {
+        guard let query = parameters["search_query"] as? String else { return nil }
+        guard let info = await service.eventInfo(matching: query) else { return nil }
+        return "Modify calendar event '\(info.title)' on \(Self.dateFormatter.string(from: info.startDate))"
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
 }

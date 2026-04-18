@@ -187,6 +187,19 @@ actor RemindersService {
         return title
     }
 
+    /// Non-throwing lookup that returns a sendable snapshot of the first
+    /// reminder matching the query, or `nil` if access is denied or nothing
+    /// matches. Used by `confirmationDescription` to surface the actual target.
+    func reminderInfo(matching query: String) async -> ReminderInfo? {
+        do {
+            try await ensureAccess()
+            let reminder = try await findReminder(matching: query)
+            return snapshot(reminder)
+        } catch {
+            return nil
+        }
+    }
+
     /// Returns all reminder lists.
     func allLists() async throws -> [ReminderListInfo] {
         try await ensureAccess()

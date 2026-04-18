@@ -24,10 +24,17 @@ protocol AgentTool: Sendable {
 
     /// Optional human-readable description for the confirmation dialog.
     func confirmationDescription(parameters: [String: Any]) -> String
+
+    /// Optional async overload — lets a tool look up the actual target of a
+    /// search-then-act operation (e.g. resolve which calendar event will be
+    /// deleted) and surface it in the prompt. Return `nil` to defer to the
+    /// synchronous overload.
+    func confirmationDescription(parameters: [String: Any]) async -> String?
 }
 
 extension AgentTool {
     func confirmationDescription(parameters: [String: Any]) -> String { "" }
+    func confirmationDescription(parameters: [String: Any]) async -> String? { nil }
 
     /// Convert this tool to a ``ToolDefinition`` suitable for the AI provider API.
     func toToolDefinition() -> ToolDefinition {

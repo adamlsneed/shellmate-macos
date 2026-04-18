@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatView: View {
     @Environment(AppState.self) private var appState
     @Environment(AIConfigState.self) private var aiConfig
+    @Environment(ToolingState.self) private var toolingState
     @State private var chatState = ChatState()
     @State private var sendTask: Task<Void, Never>?
 
@@ -45,6 +46,9 @@ struct ChatView: View {
             Divider().background(ShellmateColors.navy700)
             inputBar
         }.background(ShellmateColors.background)
+        .onAppear {
+            toolingState.attach(chatState: chatState)
+        }
     }
 
     private var emptyState: some View {
@@ -77,11 +81,14 @@ struct ChatView: View {
                 if chatState.isStreaming { cancelStreaming() } else { let t = chatState.inputText.trimmingCharacters(in: .whitespacesAndNewlines); if !t.isEmpty { sendMessage(t) } }
             }) {
                 Image(systemName: chatState.isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill").font(.title2).foregroundStyle(ShellmateColors.accent)
-            }.buttonStyle(.plain).disabled(chatState.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !chatState.isStreaming)
+            }.buttonStyle(.plain).disabled((chatState.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !chatState.isStreaming) || chatState.pendingConfirmation != nil)
         }.padding(16).background(ShellmateColors.navy900)
     }
 
     private func sendMessage(_ text: String) {
+        // Defensive: if a confirmation is somehow still pending (button should be
+        // disabled), refuse to start a new send rather than orphan the continuation.
+        if chatState.pendingConfirmation != nil { return }
         chatState.addUserMessage(text); chatState.isStreaming = true; chatState.error = nil
         guard let apiKey = aiConfig.resolveApiKey() else { chatState.error = "No API key configured."; chatState.isStreaming = false; return }
         let ws = WorkspaceService(); let sp: String
@@ -90,50 +97,10 @@ struct ChatView: View {
         let capConfig = (try? cs.readConfig())?.capabilities ?? CapabilitiesConfig()
         var deny: [ToolDenyCategory] = []
         for cat in ToolDenyCategory.allCases { if capConfig.tools.deny.contains(cat.rawValue) { deny.append(cat) } }
-        let enabledSet = Set(capConfig.enabledCategories)
         let msgs: [SendableDict] = chatState.messages.map { SendableDict(["role": $0.role.rawValue, "content": $0.content]) }
-        let shellService = ShellService()
-        let appleScriptService = AppleScriptService(shellService: shellService)
-        let registry = ToolRegistry()
-        let uiHandler = ConfirmationUIHandler()
-        uiHandler.chatState = chatState
-        let confirmation = ConfirmationService(uiHandler: uiHandler)
-        let permissions = PermissionManager()
-        let executor = ToolExecutor(registry: registry, confirmationService: confirmation, permissionManager: permissions)
-        let loop = ToolUseLoop(executor: executor)
+        let loop = toolingState.loop
         sendTask = Task {
-            // Apply auto-approve settings from config
-            for catRaw in capConfig.autoApproveCategories {
-                if let cat = ToolCategory(rawValue: catRaw) {
-                    await confirmation.setAutoApprove(for: cat, enabled: true)
-                }
-            }
-
-            // Register only enabled providers
-            let allProviders: [ToolProvider] = [
-                ShellProvider(shellService: shellService),
-                FilesProvider(shellService: shellService),
-                WebProvider(shellService: shellService),
-                SystemProvider(shellService: shellService),
-                ClipboardProvider(),
-                DisplayProvider(shellService: shellService),
-                AudioProvider(shellService: shellService),
-                CalendarProvider(),
-                RemindersProvider(),
-                ContactsProvider(),
-                AppsProvider(shellService: shellService),
-                DeveloperProvider(shellService: shellService),
-                NetworkProvider(shellService: shellService),
-                NotesProvider(appleScriptService: appleScriptService),
-                EmailProvider(shellService: shellService, appleScriptService: appleScriptService),
-                AutomationProvider(shellService: shellService),
-                MediaProvider(shellService: shellService, appleScriptService: appleScriptService),
-                TTSProvider(shellService: shellService),
-                WindowProvider(),
-            ]
-            for provider in allProviders where enabledSet.contains(provider.category.rawValue) {
-                await registry.register(provider)
-            }
+            await toolingState.reconcile(capConfig: capConfig)
             let enabledCats = Set(capConfig.enabledCategories.compactMap { ToolCategory(rawValue: $0) })
             await loop.run(messages: msgs, system: sp, provider: aiConfig.provider, model: aiConfig.model, apiKey: apiKey, enabledCategories: enabledCats, denyCategories: deny, onEvent: { @Sendable ev in Task { @MainActor in handleEvent(ev) } })
         }
