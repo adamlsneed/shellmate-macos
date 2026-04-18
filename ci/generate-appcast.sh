@@ -63,10 +63,17 @@ if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
     fi
 fi
 
-# Build the enclosure attributes
-ENCLOSURE_ATTRS="url=\"${RELEASE_URL}\" length=\"${DMG_SIZE}\" type=\"application/octet-stream\""
+# Build the enclosure attributes.
+# Note: sign_update returns the COMPLETE attribute fragment, e.g.
+#   sparkle:edSignature="abc==" length="12345"
+# Don't wrap it in another quoted attribute or you'll get nested malformed XML.
+ENCLOSURE_ATTRS="url=\"${RELEASE_URL}\" type=\"application/octet-stream\""
 if [ -n "$EDDSA_SIGNATURE" ]; then
-    ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} sparkle:edSignature=\"${EDDSA_SIGNATURE}\""
+    # sign_update output already includes both edSignature and length attributes.
+    ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} ${EDDSA_SIGNATURE}"
+else
+    # No signature: include our own length so the enclosure is still valid.
+    ENCLOSURE_ATTRS="${ENCLOSURE_ATTRS} length=\"${DMG_SIZE}\""
 fi
 
 # Generate appcast XML
