@@ -89,16 +89,27 @@ struct WindowArrangeTool: AgentTool {
             return .error("Unknown preset.")
         }
 
-        // Set position
+        // Set position — fail loudly if AX returns anything other than success
+        // (most commonly happens when Accessibility permission isn't granted,
+        // in which case we'd otherwise silently report "arranged" while the
+        // window stayed put).
         var pos = targetPos
-        if let posValue = AXValueCreate(.cgPoint, &pos) {
-            AXUIElementSetAttributeValue(axWindow, kAXPositionAttribute as CFString, posValue)
+        guard let posValue = AXValueCreate(.cgPoint, &pos) else {
+            return .error("Failed to create position value.")
+        }
+        let posResult = AXUIElementSetAttributeValue(axWindow, kAXPositionAttribute as CFString, posValue)
+        guard posResult == .success else {
+            return .error("Failed to position window (AX error \(posResult.rawValue)). Check Accessibility permission in System Settings → Privacy & Security → Accessibility.")
         }
 
         // Set size
         var size = targetSize
-        if let sizeValue = AXValueCreate(.cgSize, &size) {
-            AXUIElementSetAttributeValue(axWindow, kAXSizeAttribute as CFString, sizeValue)
+        guard let sizeValue = AXValueCreate(.cgSize, &size) else {
+            return .error("Failed to create size value.")
+        }
+        let sizeResult = AXUIElementSetAttributeValue(axWindow, kAXSizeAttribute as CFString, sizeValue)
+        guard sizeResult == .success else {
+            return .error("Failed to size window (AX error \(sizeResult.rawValue)). Check Accessibility permission in System Settings → Privacy & Security → Accessibility.")
         }
 
         return .success("Arranged '\(app)' window to \(preset) (\(Int(targetSize.width))x\(Int(targetSize.height)) at \(Int(targetPos.x)),\(Int(targetPos.y))).")

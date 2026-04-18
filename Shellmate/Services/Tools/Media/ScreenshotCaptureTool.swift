@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Captures a screenshot using the macOS `screencapture` CLI.
@@ -35,6 +36,15 @@ struct ScreenshotCaptureTool: AgentTool {
     init(shellService: ShellService) { self.shellService = shellService }
 
     func execute(parameters: [String: Any]) async throws -> AgentToolResult {
+        // Inline preflight: this is the only MediaProvider tool that needs
+        // Screen Recording. Without this, screencapture's denial signal is a
+        // 0-byte file and the user has no idea why "Screenshot saved to:"
+        // produced nothing. Trigger the OS prompt on first use.
+        if !CGPreflightScreenCaptureAccess() {
+            _ = CGRequestScreenCaptureAccess()
+            return .error(SystemPermission.screenCapture.deniedMessage)
+        }
+
         let area = (parameters["area"] as? String) ?? "full"
         let format = (parameters["format"] as? String) ?? "png"
         let delay: Int

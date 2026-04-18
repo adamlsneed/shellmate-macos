@@ -1,5 +1,7 @@
 import AppKit
+import ApplicationServices
 @preconcurrency import Contacts
+import CoreGraphics
 @preconcurrency import EventKit
 import Foundation
 
@@ -39,8 +41,9 @@ actor PermissionManager {
 
     // MARK: - Real OS Queries
 
-    /// Checks actual OS authorization for calendars, reminders, contacts.
-    /// For other permissions, returns the cached value.
+    /// Checks actual OS authorization for calendars, reminders, contacts,
+    /// accessibility, and screen recording. For other permissions, returns
+    /// the cached value.
     func queryRealStatus(for permission: SystemPermission) -> PermissionStatus {
         let status: PermissionStatus
         switch permission {
@@ -50,6 +53,11 @@ actor PermissionManager {
             status = mapEventKitStatus(EKEventStore.authorizationStatus(for: .reminder))
         case .contacts:
             status = mapContactsStatus(CNContactStore.authorizationStatus(for: .contacts))
+        case .accessibility:
+            // AXIsProcessTrusted does not prompt — pure query.
+            status = AXIsProcessTrusted() ? .granted : .notRequested
+        case .screenCapture:
+            status = CGPreflightScreenCaptureAccess() ? .granted : .notRequested
         default:
             return cache[permission, default: .notRequested]
         }
@@ -58,6 +66,9 @@ actor PermissionManager {
     }
 
     /// Requests permission from the OS and returns the resulting status.
+    /// For AX/screen-capture, this triggers the macOS prompt asynchronously;
+    /// the return value reflects status *at call time* (likely still false
+    /// even after a successful prompt — the user has to grant + restart the flow).
     func requestPermission(_ permission: SystemPermission) async -> PermissionStatus {
         let status: PermissionStatus
         switch permission {
@@ -85,6 +96,15 @@ actor PermissionManager {
             } catch {
                 status = .denied
             }
+        case .accessibility:
+            // Triggers the System Settings → Privacy & Security → Accessibility prompt.
+            // The constant `kAXTrustedCheckOptionPrompt` is a C var, which Swift 6
+            // strict concurrency rejects; use the documented literal value instead.
+            let granted = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+            status = granted ? .granted : .denied
+        case .screenCapture:
+            let granted = CGRequestScreenCaptureAccess()
+            status = granted ? .granted : .denied
         default:
             return cache[permission, default: .notRequested]
         }
@@ -96,14 +116,23 @@ actor PermissionManager {
 
     /// Checks if a tool's category requires a permission and whether that permission is denied.
     /// Returns `nil` when the tool can proceed, or a denial message string.
-    func checkPermissions(for tool: AgentTool) -> String? {
+    func checkPermissions(for tool: AgentTool) async -> String? {
         guard let permission = systemPermission(for: tool.category) else {
             return nil
         }
         let realStatus = queryRealStatus(for: permission)
         switch realStatus {
         case .notRequested:
-            // Permission will be requested when the service tries to access data
+            // Calendar/Reminders/Contacts have a service layer (EKEventStore /
+            // CNContactStore) that prompts on first access — defer to it.
+            // Accessibility / screen recording have no equivalent — trigger the
+            // prompt here, then return the friendly denied message so the user
+            // is told to grant + retry.
+            if permission == .accessibility || permission == .screenCapture {
+                let after = await requestPermission(permission)
+                if after == .granted { return nil }
+                return permission.deniedMessage
+            }
             return nil
         case .granted:
             return nil
@@ -126,6 +155,10 @@ actor PermissionManager {
         case .calendar:  .calendars
         case .reminders: .reminders
         case .contacts:  .contacts
+        case .windows:   .accessibility
+        // .media intentionally NOT mapped — only ScreenshotCaptureTool needs
+        // screen recording; music/PDF/OCR/image tools don't. That tool does
+        // its own inline preflight.
         default:         nil
         }
     }
