@@ -238,7 +238,11 @@ jobs:
             build/${{ env.APP_NAME }}-${{ steps.version.outputs.VERSION }}.dmg
             build/appcast.xml
           generate_release_notes: true
-          draft: false
+          # Tags ending in -rc<n> or -dry<n> produce a draft + prerelease so
+          # the artifact can be inspected without publishing to end users.
+          # Plain semver tags (v0.0.2, v0.1.0) publish normally.
+          draft: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-dry') }}
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-dry') }}
 
       - name: Cleanup keychain
         if: always()
