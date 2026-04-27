@@ -27,7 +27,7 @@ struct CronRemoveTool: AgentTool {
 
         // Reject empty/whitespace-only patterns — `grep -v ''` matches every non-empty
         // line and would silently wipe the entire crontab.
-        let trimmed = pattern.trimmingCharacters(in: .whitespaces)
+        let trimmed = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return .error("Pattern cannot be empty (would wipe entire crontab). Provide a specific pattern that uniquely identifies the entry to remove.")
         }

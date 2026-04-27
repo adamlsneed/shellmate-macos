@@ -14,14 +14,14 @@ struct SystemMonitorTool: AgentTool {
         required: []
     )
 
-    private let shellService: ShellService
-    init(shellService: ShellService) { self.shellService = shellService }
+    private let shellService: any ShellCommandRunning
+    init(shellService: any ShellCommandRunning) { self.shellService = shellService }
 
     func execute(parameters: [String: Any]) async throws -> AgentToolResult {
         var sections: [String] = []
 
         // CPU load
-        let cpuResult = try await shellService.runCommand("top -l 1 -n 0 -s 0", timeout: 15)
+        let cpuResult = try await shellService.runCommand("top -l 1 -n 0 -s 0", workingDirectory: nil, timeout: 15)
         if cpuResult.succeeded {
             let cpuLines = cpuResult.stdout
                 .split(separator: "\n")
@@ -33,13 +33,13 @@ struct SystemMonitorTool: AgentTool {
         }
 
         // Memory via vm_stat
-        let vmResult = try await shellService.runCommand("vm_stat", timeout: 10)
+        let vmResult = try await shellService.runCommand("vm_stat", workingDirectory: nil, timeout: 10)
         if vmResult.succeeded {
             sections.append("--- Memory ---\n" + vmResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
         }
 
         // Battery
-        let battResult = try await shellService.runCommand("pmset -g batt", timeout: 10)
+        let battResult = try await shellService.runCommand("pmset -g batt", workingDirectory: nil, timeout: 10)
         if battResult.succeeded, !battResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             sections.append("--- Battery ---\n" + battResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
         }

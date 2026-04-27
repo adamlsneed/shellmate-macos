@@ -147,10 +147,10 @@ struct MediaToolTests {
         @Test("rejects invalid format")
         func rejectsInvalidFormat() async throws {
             let tool = ImageConvertTool(shellService: shell)
-            // Create a temp file so the file check passes
-            let path = NSTemporaryDirectory() + "test_convert.jpg"
+            let dir = TestFixtures.makeTempDir(prefix: "image-convert-test")
+            defer { TestFixtures.cleanupTempDir(dir) }
+            let path = dir.appendingPathComponent("test_convert.jpg").path
             FileManager.default.createFile(atPath: path, contents: Data())
-            defer { try? FileManager.default.removeItem(atPath: path) }
 
             let result = try await tool.execute(parameters: ["path": path, "format": "webp"])
             #expect(result.isError)

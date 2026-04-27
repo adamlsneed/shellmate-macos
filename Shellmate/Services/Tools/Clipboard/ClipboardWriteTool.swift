@@ -25,6 +25,13 @@ struct ClipboardWriteTool: AgentTool {
             return .error("Missing required parameter: text")
         }
 
+        return await MainActor.run {
+            writePasteboard(text)
+        }
+    }
+
+    @MainActor
+    private func writePasteboard(_ text: String) -> AgentToolResult {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)

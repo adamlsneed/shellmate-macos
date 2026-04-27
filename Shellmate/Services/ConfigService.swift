@@ -85,8 +85,23 @@ final class ConfigService: Sendable {
 
     func backupConfig() throws {
         guard FileManager.default.fileExists(atPath: configFile.path) else { return }
-        let backupFile = configDir.appendingPathComponent("shellmate.json.bak-\(BackupTimestamp.now)")
+        let backupFile = nextBackupURL()
         try FileManager.default.copyItem(at: configFile, to: backupFile)
+    }
+
+    private func nextBackupURL() -> URL {
+        let timestamp = BackupTimestamp.now
+        let first = configDir.appendingPathComponent("shellmate.json.bak-\(timestamp)")
+        guard FileManager.default.fileExists(atPath: first.path) else { return first }
+
+        var suffix = 1
+        while true {
+            let candidate = configDir.appendingPathComponent("shellmate.json.bak-\(timestamp)-\(suffix)")
+            if !FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+            suffix += 1
+        }
     }
 
     func restoreFromBackup() throws -> ShellmateConfig {

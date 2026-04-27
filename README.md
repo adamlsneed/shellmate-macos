@@ -16,7 +16,7 @@ Download the latest DMG from [Releases](https://github.com/adamlsneed/shellmate-
 
 ```bash
 swift build            # Debug build
-swift test             # Run all tests (605 tests)
+swift test             # Run all tests (625 tests)
 swift build -c release # Release build
 open Package.swift     # Open in Xcode
 ```
@@ -111,7 +111,7 @@ Automated via GitHub Actions on tag push (`v*`):
 
 ## Version
 
-Current: 0.0.1
+Current: 0.0.1 (build 2)
 
 ## License
 

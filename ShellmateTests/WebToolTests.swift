@@ -22,6 +22,18 @@ import Testing; import Foundation; @testable import Shellmate
         #expect(tool.actionTier == .read)
         #expect(tool.parameterSchema.required == ["query"])
     }
+
+    @Test("resolves Brave API key from env before Keychain")
+    func resolvesBraveAPIKey() {
+        #expect(WebSearchTool.resolveAPIKey(environment: [:], keychainValue: nil) == nil)
+        #expect(WebSearchTool.resolveAPIKey(environment: [:], keychainValue: "BSA-keychain") == "BSA-keychain")
+        #expect(
+            WebSearchTool.resolveAPIKey(
+                environment: ["BRAVE_API_KEY": "BSA-env"],
+                keychainValue: "BSA-keychain"
+            ) == "BSA-env"
+        )
+    }
 }
 
 @Suite("WebFetchTool") struct WebFetchToolTests {

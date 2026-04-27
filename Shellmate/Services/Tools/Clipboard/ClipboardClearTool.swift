@@ -16,6 +16,13 @@ struct ClipboardClearTool: AgentTool {
     )
 
     func execute(parameters: [String: Any]) async throws -> AgentToolResult {
+        return await MainActor.run {
+            clearPasteboard()
+        }
+    }
+
+    @MainActor
+    private func clearPasteboard() -> AgentToolResult {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         return .success("Clipboard cleared.")

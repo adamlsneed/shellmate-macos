@@ -18,8 +18,8 @@ struct SystemStorageTool: AgentTool {
         required: []
     )
 
-    private let shellService: ShellService
-    init(shellService: ShellService) { self.shellService = shellService }
+    private let shellService: any ShellCommandRunning
+    init(shellService: any ShellCommandRunning) { self.shellService = shellService }
 
     func execute(parameters: [String: Any]) async throws -> AgentToolResult {
         let directory = (parameters["directory"] as? String)
@@ -31,7 +31,7 @@ struct SystemStorageTool: AgentTool {
         var sections: [String] = []
 
         // Volume overview via df -h
-        let dfResult = try await shellService.runCommand("df -h", timeout: 10)
+        let dfResult = try await shellService.runCommand("df -h", workingDirectory: nil, timeout: 10)
         if dfResult.succeeded {
             sections.append("--- Volume Overview ---\n" + dfResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
         }
@@ -40,13 +40,15 @@ struct SystemStorageTool: AgentTool {
         let duResult = try await shellService.run(
             executable: "du",
             arguments: ["-h", "-d", "\(depth)", directory],
+            environment: nil,
+            workingDirectory: nil,
             timeout: 30
         )
         if duResult.succeeded {
             sections.append("--- Directory Breakdown: \(directory) (depth \(depth)) ---\n" + duResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
         } else if !duResult.stderr.isEmpty {
             // du may partially fail on permission-denied dirs; include what we got
-            var output = duResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            let output = duResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             if !output.isEmpty {
                 sections.append("--- Directory Breakdown (partial): \(directory) ---\n" + output)
             }

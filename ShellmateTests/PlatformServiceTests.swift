@@ -10,6 +10,12 @@ struct PlatformServiceTests {
     @Suite("ExternalLinkHandler")
     struct ExternalLinkHandlerTests {
 
+        @Test("app links point at shellmate-macos repository")
+        func testAppLinks() {
+            #expect(ShellmateLinks.repository == "https://github.com/adamlsneed/shellmate-macos")
+            #expect(ShellmateLinks.issues == "https://github.com/adamlsneed/shellmate-macos/issues/new")
+        }
+
         @Test("rejects invalid URL strings")
         func testInvalidURL() {
             let result = ExternalLinkHandler.open("")
@@ -59,20 +65,20 @@ struct PlatformServiceTests {
 
         @Test("notifications post and observe synchronously")
         func testNotificationRoundTrip() {
-            var received = false
+            let recorder = NotificationRecorder()
 
             let observer = NotificationCenter.default.addObserver(
                 forName: .shellmateNewChat,
                 object: nil,
                 queue: nil
             ) { _ in
-                received = true
+                recorder.markReceived()
             }
+            defer { NotificationCenter.default.removeObserver(observer) }
 
             NotificationCenter.default.post(name: .shellmateNewChat, object: nil)
 
-            #expect(received == true)
-            NotificationCenter.default.removeObserver(observer)
+            #expect(recorder.wasReceived)
         }
     }
 
@@ -109,7 +115,24 @@ struct PlatformServiceTests {
         @Test("AppLifecycleManager can be instantiated")
         func testLifecycleManagerInit() {
             let manager = AppLifecycleManager()
-            #expect(manager is NSObject)
+            #expect(ObjectIdentifier(type(of: manager)) == ObjectIdentifier(AppLifecycleManager.self))
         }
+    }
+}
+
+private final class NotificationRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var received = false
+
+    var wasReceived: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return received
+    }
+
+    func markReceived() {
+        lock.lock()
+        received = true
+        lock.unlock()
     }
 }

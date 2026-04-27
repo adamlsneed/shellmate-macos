@@ -11,6 +11,24 @@ struct ShellResult: Sendable {
     var succeeded: Bool { exitCode == 0 }
 }
 
+// MARK: - ShellCommandRunning
+
+protocol ShellCommandRunning: Sendable {
+    func run(
+        executable: String,
+        arguments: [String],
+        environment: [String: String]?,
+        workingDirectory: URL?,
+        timeout: TimeInterval
+    ) async throws -> ShellResult
+
+    func runCommand(
+        _ command: String,
+        workingDirectory: URL?,
+        timeout: TimeInterval
+    ) async throws -> ShellResult
+}
+
 // MARK: - ShellHistoryEntry
 
 struct ShellHistoryEntry: Sendable, Identifiable {
@@ -293,3 +311,5 @@ actor ShellService {
         }
     }
 }
+
+extension ShellService: ShellCommandRunning {}

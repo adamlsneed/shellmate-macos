@@ -27,8 +27,8 @@ struct WebSearchTool: AgentTool {
             return .error("Missing required 'query' parameter")
         }
 
-        guard let apiKey = ProcessInfo.processInfo.environment["BRAVE_API_KEY"], !apiKey.isEmpty else {
-            return .error("Web search unavailable: BRAVE_API_KEY not set")
+        guard let apiKey = Self.resolveAPIKey() else {
+            return .error("Web search unavailable: BRAVE_API_KEY or Brave key in Settings not set")
         }
 
         let count = min((parameters["count"] as? Int) ?? 5, 20)
@@ -69,5 +69,18 @@ struct WebSearchTool: AgentTool {
         }.joined(separator: "\n\n")
 
         return .success(formatted)
+    }
+
+    static func resolveAPIKey(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        keychainValue: String? = KeychainHelper.read(service: KeychainHelper.apiKeyService, account: "brave")
+    ) -> String? {
+        if let envKey = environment["BRAVE_API_KEY"], !envKey.isEmpty {
+            return envKey
+        }
+        if let keychainValue, !keychainValue.isEmpty {
+            return keychainValue
+        }
+        return nil
     }
 }

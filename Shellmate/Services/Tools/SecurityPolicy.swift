@@ -45,7 +45,7 @@ enum SecurityPolicy {
     private static func isResolvedPathBlocked(_ resolved: String) -> Bool {
         // Check absolute path blocklist
         for blocked in blockedAbsolutePaths {
-            if resolved.hasPrefix(blocked) { return true }
+            if pathMatches(resolved, blockedPrefix: blocked) { return true }
         }
 
         // Check home-relative blocklist against both resolved and unresolved home
@@ -58,12 +58,23 @@ enum SecurityPolicy {
             if resolved.hasPrefix(home) && resolved.count > home.count + 1 {
                 let relative = String(resolved.dropFirst(home.count + 1))
                 for blocked in blockedHomePaths {
-                    if relative.hasPrefix(blocked) { return true }
+                    if homePathMatches(relative, blockedPrefix: blocked) { return true }
                 }
             }
         }
 
         return false
+    }
+
+    private static func pathMatches(_ path: String, blockedPrefix: String) -> Bool {
+        path == blockedPrefix || path.hasPrefix(blockedPrefix + "/")
+    }
+
+    private static func homePathMatches(_ path: String, blockedPrefix: String) -> Bool {
+        if blockedPrefix == ".env", path.hasPrefix(".env.") {
+            return true
+        }
+        return pathMatches(path, blockedPrefix: blockedPrefix)
     }
 
     // MARK: - URL Blocklist

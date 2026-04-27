@@ -12,6 +12,7 @@ struct SecurityPolicyTests {
         #expect(SecurityPolicy.isPathBlocked("\(home)/.gnupg/trustdb.gpg"))
         #expect(SecurityPolicy.isPathBlocked("\(home)/.aws/credentials"))
         #expect(SecurityPolicy.isPathBlocked("\(home)/.env"))
+        #expect(SecurityPolicy.isPathBlocked("\(home)/.env.local"))
     }
 
     @Test("blocks system paths")
@@ -27,6 +28,15 @@ struct SecurityPolicyTests {
         #expect(!SecurityPolicy.isPathBlocked("\(home)/Documents/test.txt"))
         #expect(!SecurityPolicy.isPathBlocked("\(home)/Desktop/notes.md"))
         #expect(!SecurityPolicy.isPathBlocked("/tmp/test"))
+    }
+
+    @Test("allows paths that only share a blocked prefix")
+    func testAllowsPathPrefixLookalikes() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        #expect(!SecurityPolicy.isPathBlocked("/etcetera/config.txt"))
+        #expect(!SecurityPolicy.isPathBlocked("\(home)/.ssh-not-secret/id_rsa"))
+        #expect(!SecurityPolicy.isPathBlocked("\(home)/.environment"))
+        #expect(!SecurityPolicy.isPathBlocked("\(home)/Library/Keychains-backup/login.keychain"))
     }
 
     @Test("blocks private IPs and localhost")

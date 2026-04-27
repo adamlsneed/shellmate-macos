@@ -1,6 +1,11 @@
 import SwiftUI
 import Sparkle
 
+enum ShellmateLinks {
+    static let repository = "https://github.com/adamlsneed/shellmate-macos"
+    static let issues = "https://github.com/adamlsneed/shellmate-macos/issues/new"
+}
+
 @main
 struct ShellmateApp: App {
     @State private var appState = AppState()
@@ -49,11 +54,11 @@ struct ShellmateApp: App {
             // Help menu
             CommandGroup(replacing: .help) {
                 Button("Shellmate Help") {
-                    ExternalLinkHandler.open("https://github.com/adamlsneed/shellmate")
+                    ExternalLinkHandler.open(ShellmateLinks.repository)
                 }
 
                 Button("Report an Issue") {
-                    ExternalLinkHandler.open("https://github.com/adamlsneed/shellmate/issues/new")
+                    ExternalLinkHandler.open(ShellmateLinks.issues)
                 }
             }
         }

@@ -14,14 +14,14 @@ struct SystemNetworkInfoTool: AgentTool {
         required: []
     )
 
-    private let shellService: ShellService
-    init(shellService: ShellService) { self.shellService = shellService }
+    private let shellService: any ShellCommandRunning
+    init(shellService: any ShellCommandRunning) { self.shellService = shellService }
 
     func execute(parameters: [String: Any]) async throws -> AgentToolResult {
         var sections: [String] = []
 
         // Active network interfaces
-        let ifResult = try await shellService.runCommand("ifconfig -lu", timeout: 10)
+        let ifResult = try await shellService.runCommand("ifconfig -lu", workingDirectory: nil, timeout: 10)
         if ifResult.succeeded {
             let interfaces = ifResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             sections.append("--- Active Interfaces ---\n\(interfaces)")
@@ -30,6 +30,7 @@ struct SystemNetworkInfoTool: AgentTool {
         // Detailed interface info (IPv4 addresses)
         let inetResult = try await shellService.runCommand(
             "ifconfig | grep -E '^[a-z]|inet ' | grep -v '127.0.0.1'",
+            workingDirectory: nil,
             timeout: 10
         )
         if inetResult.succeeded, !inetResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -39,6 +40,7 @@ struct SystemNetworkInfoTool: AgentTool {
         // Wi-Fi info via airport
         let wifiResult = try await shellService.runCommand(
             "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I 2>/dev/null",
+            workingDirectory: nil,
             timeout: 10
         )
         if wifiResult.succeeded, !wifiResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -48,6 +50,7 @@ struct SystemNetworkInfoTool: AgentTool {
         // DNS servers
         let dnsResult = try await shellService.runCommand(
             "scutil --dns | grep 'nameserver\\[' | sort -u",
+            workingDirectory: nil,
             timeout: 10
         )
         if dnsResult.succeeded, !dnsResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

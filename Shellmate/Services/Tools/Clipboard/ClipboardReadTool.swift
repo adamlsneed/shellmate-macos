@@ -16,6 +16,13 @@ struct ClipboardReadTool: AgentTool {
     )
 
     func execute(parameters: [String: Any]) async throws -> AgentToolResult {
+        return await MainActor.run {
+            readPasteboard()
+        }
+    }
+
+    @MainActor
+    private func readPasteboard() -> AgentToolResult {
         let pasteboard = NSPasteboard.general
 
         // Try plain text first

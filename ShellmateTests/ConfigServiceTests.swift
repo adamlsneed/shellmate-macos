@@ -30,6 +30,27 @@ struct ConfigServiceTests {
         #expect(decoded.capabilities.tools.deny == ["browser"])
     }
 
+    @Test("backups do not collide when created in the same second")
+    func testBackupFilenameCollision() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("shellmate-config-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let service = ConfigService(configDir: tmpDir)
+        var config = ShellmateConfig()
+        config.setupComplete = true
+        try service.writeConfig(config)
+
+        while Date().timeIntervalSince1970.truncatingRemainder(dividingBy: 1) > 0.80 {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+
+        try service.backupConfig()
+        try service.backupConfig()
+
+        #expect(service.listBackups().count == 2)
+    }
+
     @Test("AgentSpec encodes with snake_case keys")
     func testAgentSpecCodingKeys() throws {
         let spec = AgentSpec(

@@ -3,7 +3,7 @@ import AppKit
 import Foundation
 @testable import Shellmate
 
-@Suite("ClipboardProvider Tools")
+@Suite("ClipboardProvider Tools", .serialized)
 struct ClipboardToolTests {
 
     // MARK: - ClipboardReadTool
@@ -32,7 +32,9 @@ struct ClipboardToolTests {
 
         @Test("handles empty pasteboard gracefully")
         func readsEmptyPasteboard() async throws {
-            NSPasteboard.general.clearContents()
+            await MainActor.run {
+                _ = NSPasteboard.general.clearContents()
+            }
 
             let tool = ClipboardReadTool()
             let result = try await tool.execute(parameters: [:])
