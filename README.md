@@ -111,7 +111,7 @@ Automated via GitHub Actions on tag push (`v*`):
 
 ## Version
 
-Current: 0.0.1 (build 2)
+Current: 0.0.4 (build 2)
 
 ## License
 
